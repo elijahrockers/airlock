@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import settings
-from src.routes import datasets, health, keys, patients, studies
+from src.routes import accessions, datasets, health, keys, patients, studies
 
 
 @asynccontextmanager
@@ -27,3 +27,4 @@ app.include_router(studies.router)
 app.include_router(keys.router)
 app.include_router(patients.router)
 app.include_router(datasets.router)
+app.include_router(accessions.router)

@@ -8,7 +8,13 @@ from src.audit import log_action
 from src.auth import User, get_current_user
 from src.database import get_db
 from src.models import PatientMapping, Study
-from src.schemas import PatientLookupResponse, PatientMappingCreate, PatientMappingResponse
+from src.schemas import (
+    PatientBulkRevealResponse,
+    PatientLookupResponse,
+    PatientMappingCreate,
+    PatientMappingResponse,
+    PatientRevealResponse,
+)
 from src.security import decrypt, encrypt, hmac_hash
 
 router = APIRouter(prefix="/api/v1/studies/{study_id}/patients", tags=["patients"])
@@ -121,6 +127,81 @@ async def lookup_patient(
     await db.commit()
 
     return PatientLookupResponse(
+        id=mapping.id,
+        study_id=mapping.study_id,
+        mrn=decrypted_mrn,
+        subject_id=mapping.subject_id,
+    )
+
+
+@router.get("/reveal-all", response_model=PatientBulkRevealResponse)
+async def reveal_all_patients(
+    study_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_study_or_404(db, study_id)
+
+    result = await db.execute(
+        select(PatientMapping)
+        .where(PatientMapping.study_id == study_id)
+        .order_by(PatientMapping.created_at)
+    )
+    mappings = result.scalars().all()
+
+    patients = [
+        PatientRevealResponse(
+            id=m.id,
+            study_id=m.study_id,
+            mrn=decrypt(m.mrn_encrypted),
+            subject_id=m.subject_id,
+        )
+        for m in mappings
+    ]
+
+    await log_action(
+        db,
+        actor=user.username,
+        action="reveal_all_patients",
+        resource_type="study",
+        resource_id=str(study_id),
+        detail={"count": len(patients)},
+    )
+    await db.commit()
+
+    return PatientBulkRevealResponse(
+        study_id=study_id,
+        count=len(patients),
+        patients=patients,
+    )
+
+
+@router.get("/{patient_id}/reveal", response_model=PatientRevealResponse)
+async def reveal_patient(
+    study_id: uuid.UUID,
+    patient_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_study_or_404(db, study_id)
+
+    mapping = await db.get(PatientMapping, patient_id)
+    if not mapping or mapping.study_id != study_id:
+        raise HTTPException(status_code=404, detail="Patient mapping not found in this study")
+
+    decrypted_mrn = decrypt(mapping.mrn_encrypted)
+
+    await log_action(
+        db,
+        actor=user.username,
+        action="reveal_patient",
+        resource_type="patient_mapping",
+        resource_id=str(mapping.id),
+        detail={"study_id": str(study_id)},
+    )
+    await db.commit()
+
+    return PatientRevealResponse(
         id=mapping.id,
         study_id=mapping.study_id,
         mrn=decrypted_mrn,

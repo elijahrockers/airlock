@@ -116,6 +116,9 @@ class PatientMapping(Base):
     )
 
     study: Mapped["Study"] = relationship(back_populates="patient_mappings")
+    accession_mappings: Mapped[list["AccessionMapping"]] = relationship(
+        back_populates="patient_mapping"
+    )
 
 
 class DatasetManifest(Base):
@@ -143,6 +146,42 @@ class DatasetManifest(Base):
 
     study: Mapped["Study"] = relationship(back_populates="dataset_manifests")
     global_hash_key: Mapped["GlobalHashKey"] = relationship()
+    accession_mappings: Mapped[list["AccessionMapping"]] = relationship(
+        back_populates="dataset_manifest"
+    )
+
+
+class AccessionMapping(Base):
+    __tablename__ = "accession_mappings"
+    __table_args__ = (
+        UniqueConstraint("study_id", "accession_hash", name="uq_study_accession"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    patient_mapping_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patient_mappings.id"), nullable=False
+    )
+    study_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("studies.id"), nullable=False
+    )
+    dataset_manifest_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("dataset_manifests.id"), nullable=False
+    )
+    accession_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    accession_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    patient_mapping: Mapped["PatientMapping"] = relationship(
+        back_populates="accession_mappings"
+    )
+    study: Mapped["Study"] = relationship()
+    dataset_manifest: Mapped["DatasetManifest"] = relationship(
+        back_populates="accession_mappings"
+    )
 
 
 class AuditLog(Base):

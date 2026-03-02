@@ -79,6 +79,19 @@ class PatientLookupResponse(BaseModel):
     subject_id: str
 
 
+class PatientRevealResponse(BaseModel):
+    id: uuid.UUID
+    study_id: uuid.UUID
+    mrn: str
+    subject_id: str
+
+
+class PatientBulkRevealResponse(BaseModel):
+    study_id: uuid.UUID
+    count: int
+    patients: list[PatientRevealResponse]
+
+
 # --- Dataset Manifest ---
 
 class DatasetManifestCreate(BaseModel):
@@ -100,6 +113,56 @@ class DatasetManifestResponse(BaseModel):
     record_count: int | None
     metadata_json: dict | None
     created_at: datetime
+
+
+# --- Accession Mapping ---
+
+
+class AccessionMappingResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    patient_mapping_id: uuid.UUID
+    study_id: uuid.UUID
+    dataset_manifest_id: uuid.UUID
+    created_at: datetime
+
+
+class AccessionRevealResponse(BaseModel):
+    id: uuid.UUID
+    patient_mapping_id: uuid.UUID
+    study_id: uuid.UUID
+    dataset_manifest_id: uuid.UUID
+    accession_number: str
+    subject_id: str
+
+
+class AccessionBulkRevealResponse(BaseModel):
+    study_id: uuid.UUID
+    count: int
+    accessions: list[AccessionRevealResponse]
+
+
+# --- Dataset Upload ---
+
+
+class DatasetUploadRow(BaseModel):
+    mrn: str = Field(max_length=50)
+    subject_id: str = Field(max_length=100)
+    accession_number: str = Field(max_length=100)
+
+
+class DatasetUploadRequest(BaseModel):
+    dataset_type: DatasetType = DatasetType.dicom_images
+    description: str | None = None
+    records: list[DatasetUploadRow] = Field(min_length=1)
+
+
+class DatasetUploadResponse(BaseModel):
+    manifest: DatasetManifestResponse
+    patients_created: int
+    patients_reused: int
+    accessions_created: int
 
 
 # --- Audit Log ---

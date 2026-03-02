@@ -3,7 +3,15 @@
 import asyncio
 
 from src.database import async_session_factory, engine
-from src.models import Base, DatasetManifest, DatasetType, GlobalHashKey, PatientMapping, Study
+from src.models import (
+    AccessionMapping,
+    Base,
+    DatasetManifest,
+    DatasetType,
+    GlobalHashKey,
+    PatientMapping,
+    Study,
+)
 from src.routes._helpers import create_project_key_for_study
 from src.security import encrypt, generate_key_material, hmac_hash
 
@@ -39,6 +47,22 @@ PATIENTS = [
     ("MRN-100003", "SUBJ-A003"),
     ("MRN-200001", "SUBJ-B001"),
     ("MRN-200002", "SUBJ-B002"),
+]
+
+# (mrn, accession_number) — linked to patients above
+ACCESSIONS_STUDY_0 = [
+    ("MRN-100001", "ACC-2024-00101"),
+    ("MRN-100001", "ACC-2024-00102"),
+    ("MRN-100001", "ACC-2024-00103"),
+    ("MRN-100002", "ACC-2024-00201"),
+    ("MRN-100002", "ACC-2024-00202"),
+    ("MRN-100003", "ACC-2024-00301"),
+]
+
+ACCESSIONS_STUDY_1 = [
+    ("MRN-200001", "ACC-2025-00401"),
+    ("MRN-200001", "ACC-2025-00402"),
+    ("MRN-200002", "ACC-2025-00501"),
 ]
 
 
@@ -80,31 +104,82 @@ async def seed():
             )
             db.add(mapping)
 
+        # Build MRN→patient mapping lookup for accession creation
+        patient_lookup: dict[str, dict] = {}
+        for mrn, subject_id in PATIENTS[:3]:
+            patient_lookup[mrn] = {"study_idx": 0, "mapping": None}
+        for mrn, subject_id in PATIENTS[3:]:
+            patient_lookup[mrn] = {"study_idx": 1, "mapping": None}
+
+        # Re-query patient mappings so we have their IDs
+        await db.flush()
+
         # Add dataset manifests
-        db.add(
-            DatasetManifest(
-                study_id=studies[0].id,
-                global_hash_key_id=gk.id,
-                global_key_version=gk.version,
-                dataset_type=DatasetType.dicom_images,
-                description="Cardiac MRI DICOM images — batch 1",
-                record_count=450,
-            )
+        manifest_0 = DatasetManifest(
+            study_id=studies[0].id,
+            global_hash_key_id=gk.id,
+            global_key_version=gk.version,
+            dataset_type=DatasetType.dicom_images,
+            description="Cardiac MRI DICOM images — batch 1",
+            record_count=len(ACCESSIONS_STUDY_0),
         )
-        db.add(
-            DatasetManifest(
-                study_id=studies[1].id,
-                global_hash_key_id=gk.id,
-                global_key_version=gk.version,
-                dataset_type=DatasetType.dicom_images,
-                description="Lung CT scans — training set",
-                record_count=1200,
-                metadata_json={"modality": "CT", "body_part": "chest"},
-            )
+        db.add(manifest_0)
+
+        manifest_1 = DatasetManifest(
+            study_id=studies[1].id,
+            global_hash_key_id=gk.id,
+            global_key_version=gk.version,
+            dataset_type=DatasetType.dicom_images,
+            description="Lung CT scans — training set",
+            record_count=len(ACCESSIONS_STUDY_1),
+            metadata_json={"modality": "CT", "body_part": "chest"},
         )
+        db.add(manifest_1)
+        await db.flush()
+
+        # Build MRN hash → patient mapping ID lookup
+        from sqlalchemy import select
+
+        result = await db.execute(select(PatientMapping))
+        all_patients = result.scalars().all()
+        mrn_hash_to_patient = {}
+        for p in all_patients:
+            mrn_hash_to_patient[p.mrn_hash] = p
+
+        # Create accession mappings for study 0
+        acc_count = 0
+        for mrn, accession in ACCESSIONS_STUDY_0:
+            patient = mrn_hash_to_patient[hmac_hash(mrn)]
+            db.add(
+                AccessionMapping(
+                    patient_mapping_id=patient.id,
+                    study_id=studies[0].id,
+                    dataset_manifest_id=manifest_0.id,
+                    accession_encrypted=encrypt(accession),
+                    accession_hash=hmac_hash(accession),
+                )
+            )
+            acc_count += 1
+
+        # Create accession mappings for study 1
+        for mrn, accession in ACCESSIONS_STUDY_1:
+            patient = mrn_hash_to_patient[hmac_hash(mrn)]
+            db.add(
+                AccessionMapping(
+                    patient_mapping_id=patient.id,
+                    study_id=studies[1].id,
+                    dataset_manifest_id=manifest_1.id,
+                    accession_encrypted=encrypt(accession),
+                    accession_hash=hmac_hash(accession),
+                )
+            )
+            acc_count += 1
 
         await db.commit()
-        print(f"Seeded {len(studies)} studies, {len(PATIENTS)} patients, 2 datasets, 1 global key")
+        print(
+            f"Seeded {len(studies)} studies, {len(PATIENTS)} patients, "
+            f"2 datasets, {acc_count} accessions, 1 global key"
+        )
 
 
 if __name__ == "__main__":
