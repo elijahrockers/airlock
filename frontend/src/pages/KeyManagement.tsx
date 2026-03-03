@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { api, GlobalKey } from "../api/client";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable from "../components/DataTable";
+import { useRole } from "../context/RoleContext";
 
 export default function KeyManagement() {
+  const { role } = useRole();
   const [keys, setKeys] = useState<GlobalKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRotate, setShowRotate] = useState(false);
@@ -14,6 +16,19 @@ export default function KeyManagement() {
   };
 
   useEffect(load, []);
+
+  if (role === "researcher") {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold text-gray-900">Access Restricted</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Key management is only available to brokers.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const rotate = async () => {
     await api.rotateGlobalKey();
@@ -59,7 +74,7 @@ export default function KeyManagement() {
               key: "retired",
               header: "Retired",
               render: (k: GlobalKey) =>
-                k.retired_at ? new Date(k.retired_at).toLocaleString() : "—",
+                k.retired_at ? new Date(k.retired_at).toLocaleString() : "\u2014",
             },
           ]}
           data={keys}

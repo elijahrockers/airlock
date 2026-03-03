@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from src.models import DatasetType, StudyStatus, TemporalPolicy
+from src.models import DatasetType, ReidentificationStatus, StudyStatus, TemporalPolicy
 
 # --- Study ---
 
@@ -14,6 +14,7 @@ class StudyCreate(BaseModel):
     pi_name: str = Field(max_length=200)
     requestor: str | None = Field(default=None, max_length=200)
     temporal_policy: TemporalPolicy = TemporalPolicy.removed
+    expiration_alert_date: date | None = None
 
 
 class StudyUpdate(BaseModel):
@@ -23,6 +24,7 @@ class StudyUpdate(BaseModel):
     requestor: str | None = Field(default=None, max_length=200)
     status: StudyStatus | None = None
     temporal_policy: TemporalPolicy | None = None
+    expiration_alert_date: date | None = None
 
 
 class StudyResponse(BaseModel):
@@ -34,8 +36,10 @@ class StudyResponse(BaseModel):
     description: str | None
     pi_name: str
     requestor: str | None
+    requested_by: str | None
     status: StudyStatus
     temporal_policy: TemporalPolicy
+    expiration_alert_date: date | None
     created_at: datetime
     updated_at: datetime
 
@@ -174,6 +178,30 @@ class DatasetUploadResponse(BaseModel):
     patients_created: int
     patients_reused: int
     accessions_created: int
+
+
+# --- Reidentification Request ---
+
+
+class ReidentificationRequestCreate(BaseModel):
+    message: str = Field(max_length=2000)
+
+
+class ReidentificationRequestResolve(BaseModel):
+    status: ReidentificationStatus
+
+
+class ReidentificationRequestResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    study_id: uuid.UUID
+    requested_by: str
+    message: str
+    status: ReidentificationStatus
+    created_at: datetime
+    resolved_at: datetime | None
+    resolved_by: str | None
 
 
 # --- Audit Log ---

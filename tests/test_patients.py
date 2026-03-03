@@ -356,3 +356,61 @@ class TestPatientMappings:
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
         assert resp.json()["patients"] == []
+
+
+RESEARCHER = {"X-User-Role": "researcher"}
+
+
+class TestPatientRoleAccess:
+    @pytest.fixture
+    async def study_with_patient(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-ROLE-PAT",
+                "title": "Role Patient Test",
+                "pi_name": "Dr. Role",
+                "temporal_policy": "shifted",
+            },
+        )
+        study_id = resp.json()["id"]
+        resp = await client.post(
+            f"/api/v1/studies/{study_id}/patients",
+            json={"mrn": "MRN-ROLE", "subject_id": "SUBJ-ROLE"},
+        )
+        patient_id = resp.json()["id"]
+        return study_id, patient_id
+
+    async def test_researcher_cannot_lookup(self, client, study_with_patient):
+        study_id, _ = study_with_patient
+        resp = await client.get(
+            f"/api/v1/studies/{study_id}/patients/lookup",
+            params={"mrn": "MRN-ROLE"},
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403
+
+    async def test_researcher_cannot_date_offset(self, client, study_with_patient):
+        study_id, _ = study_with_patient
+        resp = await client.get(
+            f"/api/v1/studies/{study_id}/patients/date-offset",
+            params={"mrn": "MRN-ROLE"},
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403
+
+    async def test_researcher_cannot_reveal_all(self, client, study_with_patient):
+        study_id, _ = study_with_patient
+        resp = await client.get(
+            f"/api/v1/studies/{study_id}/patients/reveal-all",
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403
+
+    async def test_researcher_cannot_reveal_one(self, client, study_with_patient):
+        study_id, patient_id = study_with_patient
+        resp = await client.get(
+            f"/api/v1/studies/{study_id}/patients/{patient_id}/reveal",
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403

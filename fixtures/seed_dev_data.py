@@ -1,6 +1,7 @@
 """Seed the dev database with sample data for manual testing."""
 
 import asyncio
+from datetime import date, timedelta
 
 from src.database import async_session_factory, engine
 from src.models import (
@@ -10,6 +11,7 @@ from src.models import (
     DatasetType,
     GlobalHashKey,
     PatientMapping,
+    ReidentificationRequest,
     Study,
     TemporalPolicy,
 )
@@ -25,6 +27,7 @@ STUDIES = [
         "requestor": "John Williams",
         "status": "active",
         "temporal_policy": TemporalPolicy.shifted,
+        "expiration_alert_date": date.today() + timedelta(days=180),
     },
     {
         "irb_pro_number": "PRO-2024-0107",
@@ -34,6 +37,7 @@ STUDIES = [
         "requestor": "Emily Rodriguez",
         "status": "active",
         "temporal_policy": TemporalPolicy.removed,
+        "expiration_alert_date": date.today() - timedelta(days=30),
     },
     {
         "irb_pro_number": "PRO-2025-0003",
@@ -42,6 +46,16 @@ STUDIES = [
         "pi_name": "Dr. Lisa Patel",
         "status": "draft",
         "temporal_policy": TemporalPolicy.unshifted,
+    },
+    {
+        "irb_pro_number": "PRO-2025-0015",
+        "title": "Brain MRI Research Dataset Request",
+        "description": "Researcher-submitted request for deidentified brain MRI data.",
+        "pi_name": "Dr. James Morton",
+        "status": "requested",
+        "requested_by": "dev_user",
+        "temporal_policy": TemporalPolicy.shifted,
+        "expiration_alert_date": date.today() + timedelta(days=365),
     },
 ]
 
@@ -179,10 +193,19 @@ async def seed():
             )
             acc_count += 1
 
+        # Add a sample reidentification request on the first (active) study
+        reident_req = ReidentificationRequest(
+            study_id=studies[0].id,
+            requested_by="dev_user",
+            message="Need to reidentify SUBJ-A001 for clinical follow-up per IRB amendment.",
+        )
+        db.add(reident_req)
+
         await db.commit()
         print(
             f"Seeded {len(studies)} studies, {len(PATIENTS)} patients, "
-            f"2 datasets, {acc_count} accessions, 1 global key"
+            f"2 datasets, {acc_count} accessions, 1 global key, "
+            f"1 reidentification request"
         )
 
 

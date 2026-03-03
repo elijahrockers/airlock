@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.audit import log_action
-from src.auth import User, get_current_user
+from src.auth import User, get_current_user, require_broker
 from src.database import get_db
 from src.models import GlobalHashKey, ProjectHashKey, Study
 from src.schemas import GlobalHashKeyResponse, KeyExportResponse
@@ -29,7 +29,7 @@ async def list_global_keys(
 @router.post("/global/rotate", response_model=GlobalHashKeyResponse, status_code=201)
 async def rotate_global_key(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_broker),
 ):
     # Retire current active key
     result = await db.execute(
@@ -67,7 +67,7 @@ async def rotate_global_key(
 async def export_keys(
     study_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_broker),
 ):
     # Get study
     study = await db.get(Study, study_id)

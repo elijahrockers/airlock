@@ -1,8 +1,24 @@
+export type UserRole = "broker" | "researcher";
+
+let currentRole: UserRole = "broker";
+
+export function setApiRole(role: UserRole) {
+  currentRole = role;
+}
+
+export function getApiRole(): UserRole {
+  return currentRole;
+}
+
 const BASE = "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Role": currentRole,
+      ...init?.headers,
+    },
     ...init,
   });
   if (!res.ok) {
@@ -22,8 +38,10 @@ export interface Study {
   description: string | null;
   pi_name: string;
   requestor: string | null;
-  status: "draft" | "active" | "completed" | "archived";
+  requested_by: string | null;
+  status: "requested" | "draft" | "active" | "completed" | "archived" | "rejected";
   temporal_policy: TemporalPolicy;
+  expiration_alert_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,11 +104,47 @@ export interface DatasetUploadResponse {
   accessions_created: number;
 }
 
+export interface ReidentificationRequest {
+  id: string;
+  study_id: string;
+  requested_by: string;
+  message: string;
+  status: "pending" | "completed" | "denied";
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+const SUBJECT_ID_ALIASES = ["subject_id", "subject id"];
+const ACCESSION_ALIASES = ["accession_number", "accession number", "accession"];
+
+export function validateCsvHeaders(
+  headerLine: string,
+): { valid: boolean; missing: string[] } {
+  const headers = headerLine
+    .replace(/^\uFEFF/, "") // strip BOM
+    .split(",")
+    .map((h) => h.trim().toLowerCase());
+
+  const missing: string[] = [];
+  if (!headers.includes("mrn")) missing.push("MRN");
+  if (!SUBJECT_ID_ALIASES.some((a) => headers.includes(a))) missing.push("Subject ID");
+  if (!ACCESSION_ALIASES.some((a) => headers.includes(a))) missing.push("Accession Number");
+
+  return { valid: missing.length === 0, missing };
+}
+
 export const api = {
   listStudies: () => request<Study[]>("/api/v1/studies"),
+  listExpiringStudies: () => request<Study[]>("/api/v1/studies/expiring"),
   getStudy: (id: string) => request<Study>(`/api/v1/studies/${id}`),
   createStudy: (data: Partial<Study>) =>
     request<Study>("/api/v1/studies", { method: "POST", body: JSON.stringify(data) }),
+
+  approveStudy: (id: string) =>
+    request<Study>(`/api/v1/studies/${id}/approve`, { method: "POST" }),
+  rejectStudy: (id: string) =>
+    request<Study>(`/api/v1/studies/${id}/reject`, { method: "POST" }),
 
   listGlobalKeys: () => request<GlobalKey[]>("/api/v1/keys/global"),
   rotateGlobalKey: () =>
@@ -135,6 +189,7 @@ export const api = {
     if (description) formData.append("description", description);
     const res = await fetch(`/api/v1/studies/${studyId}/datasets/upload-csv`, {
       method: "POST",
+      headers: { "X-User-Role": currentRole },
       body: formData,
     });
     if (!res.ok) {
@@ -160,4 +215,23 @@ export const api = {
       `/api/v1/studies/${studyId}/accessions/reveal-all${params}`,
     );
   },
+
+  listReidentificationRequests: (studyId: string) =>
+    request<ReidentificationRequest[]>(
+      `/api/v1/studies/${studyId}/reidentification-requests`,
+    ),
+  createReidentificationRequest: (studyId: string, message: string) =>
+    request<ReidentificationRequest>(
+      `/api/v1/studies/${studyId}/reidentification-requests`,
+      { method: "POST", body: JSON.stringify({ message }) },
+    ),
+  resolveReidentificationRequest: (
+    studyId: string,
+    requestId: string,
+    status: "completed" | "denied",
+  ) =>
+    request<ReidentificationRequest>(
+      `/api/v1/studies/${studyId}/reidentification-requests/${requestId}/resolve`,
+      { method: "POST", body: JSON.stringify({ status }) },
+    ),
 };

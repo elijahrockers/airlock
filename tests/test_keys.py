@@ -80,3 +80,31 @@ class TestKeyExport:
             "/api/v1/keys/study/00000000-0000-0000-0000-000000000000/export"
         )
         assert resp.status_code == 404
+
+
+RESEARCHER = {"X-User-Role": "researcher"}
+
+
+class TestKeyRoleAccess:
+    async def test_researcher_cannot_rotate(self, client):
+        resp = await client.post(
+            "/api/v1/keys/global/rotate", headers=RESEARCHER
+        )
+        assert resp.status_code == 403
+
+    async def test_researcher_cannot_export(self, client):
+        # Create study as broker so it exists
+        await client.post("/api/v1/keys/global/rotate")
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-KEY-ROLE",
+                "title": "Key Role Test",
+                "pi_name": "Dr. KeyRole",
+            },
+        )
+        study_id = resp.json()["id"]
+        resp = await client.get(
+            f"/api/v1/keys/study/{study_id}/export", headers=RESEARCHER
+        )
+        assert resp.status_code == 403

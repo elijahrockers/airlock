@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.audit import log_action
-from src.auth import User, get_current_user
+from src.auth import User, UserRole, get_current_user
 from src.database import get_db
 from src.models import (
     AccessionMapping,
@@ -107,6 +107,14 @@ async def _process_dataset_upload(
         raise HTTPException(status_code=404, detail="Study not found")
     if study.status == StudyStatus.archived:
         raise HTTPException(status_code=400, detail="Cannot upload to an archived study")
+
+    if user.role == UserRole.researcher:
+        if study.requested_by != user.username:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if study.status != StudyStatus.requested:
+            raise HTTPException(
+                status_code=409, detail="Can only upload to studies in 'requested' status"
+            )
 
     # Validate active global key
     result = await db.execute(

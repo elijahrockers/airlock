@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.audit import log_action
-from src.auth import User, get_current_user
+from src.auth import User, get_current_user, require_broker
 from src.database import get_db
 from src.models import PatientMapping, Study, TemporalPolicy
 from src.schemas import (
@@ -100,7 +100,7 @@ async def lookup_patient(
     study_id: uuid.UUID,
     mrn: str = Query(...),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_broker),
 ):
     await _get_study_or_404(db, study_id)
 
@@ -140,7 +140,7 @@ async def get_date_offset(
     study_id: uuid.UUID,
     mrn: str = Query(...),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_broker),
 ):
     study = await _get_study_or_404(db, study_id)
 
@@ -184,7 +184,7 @@ async def get_date_offset(
 async def reveal_all_patients(
     study_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_broker),
 ):
     study = await _get_study_or_404(db, study_id)
     is_shifted = study.temporal_policy == TemporalPolicy.shifted
@@ -232,7 +232,7 @@ async def reveal_patient(
     study_id: uuid.UUID,
     patient_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_broker),
 ):
     study = await _get_study_or_404(db, study_id)
 

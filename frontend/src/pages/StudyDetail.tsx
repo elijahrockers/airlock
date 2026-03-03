@@ -6,14 +6,19 @@ import {
   DatasetManifest,
   DatasetUploadResponse,
   PatientMapping,
+  ReidentificationRequest,
   Study,
 } from "../api/client";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DataTable from "../components/DataTable";
 import StatusBadge from "../components/StatusBadge";
+import { useRole } from "../context/RoleContext";
 
 export default function StudyDetail() {
   const { id } = useParams<{ id: string }>();
+  const { role } = useRole();
+  const isBroker = role === "broker";
+
   const [study, setStudy] = useState<Study | null>(null);
   const [patients, setPatients] = useState<PatientMapping[]>([]);
   const [datasets, setDatasets] = useState<DatasetManifest[]>([]);
@@ -41,12 +46,18 @@ export default function StudyDetail() {
   // Upload modal state
   const [showUpload, setShowUpload] = useState(false);
 
+  // Reidentification state
+  const [reidentRequests, setReidentRequests] = useState<ReidentificationRequest[]>([]);
+  const [showReidentModal, setShowReidentModal] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+
   const loadAll = () => {
     if (!id) return;
     api.getStudy(id).then(setStudy);
     api.listPatients(id).then(setPatients);
     api.listDatasets(id).then(setDatasets);
     api.listAccessions(id).then(setAccessions);
+    api.listReidentificationRequests(id).then(setReidentRequests);
   };
 
   useEffect(loadAll, [id]);
@@ -120,9 +131,36 @@ export default function StudyDetail() {
     }
   };
 
+  const handleApprove = async () => {
+    if (!id) return;
+    const updated = await api.approveStudy(id);
+    setStudy(updated);
+  };
+
+  const handleReject = async () => {
+    if (!id) return;
+    const updated = await api.rejectStudy(id);
+    setStudy(updated);
+  };
+
+  const handleResolve = async (requestId: string, status: "completed" | "denied") => {
+    if (!id) return;
+    setResolvingId(requestId);
+    try {
+      await api.resolveReidentificationRequest(id, requestId, status);
+      api.listReidentificationRequests(id).then(setReidentRequests);
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const canRequestReident =
+    !isBroker && study?.status !== "requested" && study?.status !== "rejected" && study?.status !== "archived";
+
   if (!study) return <p className="text-gray-500">Loading...</p>;
 
   const expandedDataset = datasets.find((d) => d.id === expandedDatasetId);
+  const canUpload = isBroker || (study.status === "requested" && study.requested_by !== null);
 
   return (
     <div className="space-y-8">
@@ -131,6 +169,22 @@ export default function StudyDetail() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">{study.title}</h1>
           <StatusBadge status={study.status} />
+          {isBroker && study.status === "requested" && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleApprove}
+                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+              >
+                Approve
+              </button>
+              <button
+                onClick={handleReject}
+                className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+              >
+                Reject
+              </button>
+            </div>
+          )}
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
           <div>
@@ -143,11 +197,31 @@ export default function StudyDetail() {
           </div>
           <div>
             <dt className="font-medium text-gray-500">Requestor</dt>
-            <dd>{study.requestor ?? "—"}</dd>
+            <dd>{study.requestor ?? "\u2014"}</dd>
           </div>
+          {study.requested_by && (
+            <div>
+              <dt className="font-medium text-gray-500">Requested By</dt>
+              <dd>{study.requested_by}</dd>
+            </div>
+          )}
           <div>
             <dt className="font-medium text-gray-500">Temporal Policy</dt>
             <dd className="capitalize">{study.temporal_policy}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-gray-500">Expiration Alert</dt>
+            <dd>
+              {!study.expiration_alert_date
+                ? "\u2014"
+                : study.expiration_alert_date <= new Date().toISOString().slice(0, 10)
+                  ? (
+                    <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      Expired {study.expiration_alert_date}
+                    </span>
+                  )
+                  : study.expiration_alert_date}
+            </dd>
           </div>
           <div>
             <dt className="font-medium text-gray-500">Created</dt>
@@ -168,23 +242,25 @@ export default function StudyDetail() {
           <h2 className="text-lg font-semibold text-gray-900">
             Patient Mappings ({patients.length})
           </h2>
-          <div className="flex gap-2">
-            {Object.keys(revealedMrns).length > 0 && (
+          {isBroker && (
+            <div className="flex gap-2">
+              {Object.keys(revealedMrns).length > 0 && (
+                <button
+                  onClick={() => setRevealedMrns({})}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Hide All MRNs
+                </button>
+              )}
               <button
-                onClick={() => setRevealedMrns({})}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => setShowConfirmRevealAll(true)}
+                disabled={revealingAll}
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
               >
-                Hide All MRNs
+                {revealingAll ? "Revealing..." : "Reveal All MRNs"}
               </button>
-            )}
-            <button
-              onClick={() => setShowConfirmRevealAll(true)}
-              disabled={revealingAll}
-              className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              {revealingAll ? "Revealing..." : "Reveal All MRNs"}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
         <DataTable
           columns={[
@@ -192,6 +268,9 @@ export default function StudyDetail() {
               key: "mrn",
               header: "MRN",
               render: (p: PatientMapping) => {
+                if (!isBroker) {
+                  return <span className="text-xs text-gray-400">***</span>;
+                }
                 const revealed = revealedMrns[p.id];
                 if (revealed) {
                   return (
@@ -231,6 +310,9 @@ export default function StudyDetail() {
                     key: "offset",
                     header: "Date Offset (days)",
                     render: (p: PatientMapping) => {
+                      if (!isBroker) {
+                        return <span className="text-xs text-gray-400">***</span>;
+                      }
                       const revealed = revealedMrns[p.id];
                       if (revealed) {
                         return (
@@ -265,12 +347,14 @@ export default function StudyDetail() {
           <h2 className="text-lg font-semibold text-gray-900">
             Dataset Manifests ({datasets.length})
           </h2>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-          >
-            Upload Dataset
-          </button>
+          {canUpload && (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              Upload Dataset
+            </button>
+          )}
         </div>
         <DataTable
           columns={[
@@ -282,13 +366,13 @@ export default function StudyDetail() {
             {
               key: "desc",
               header: "Description",
-              render: (d: DatasetManifest) => d.description ?? "—",
+              render: (d: DatasetManifest) => d.description ?? "\u2014",
             },
             {
               key: "records",
               header: "Records",
               render: (d: DatasetManifest) =>
-                d.record_count?.toLocaleString() ?? "—",
+                d.record_count?.toLocaleString() ?? "\u2014",
             },
             {
               key: "keyver",
@@ -370,25 +454,27 @@ export default function StudyDetail() {
           <h2 className="text-lg font-semibold text-gray-900">
             Accession Mappings ({accessions.length})
           </h2>
-          <div className="flex gap-2">
-            {Object.keys(revealedAccessions).length > 0 && (
-              <button
-                onClick={() => setRevealedAccessions({})}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Hide All Accessions
-              </button>
-            )}
-            {accessions.length > 0 && (
-              <button
-                onClick={() => setShowConfirmRevealAllAcc(true)}
-                disabled={revealingAllAcc}
-                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-              >
-                {revealingAllAcc ? "Revealing..." : "Reveal All Accessions"}
-              </button>
-            )}
-          </div>
+          {isBroker && (
+            <div className="flex gap-2">
+              {Object.keys(revealedAccessions).length > 0 && (
+                <button
+                  onClick={() => setRevealedAccessions({})}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Hide All Accessions
+                </button>
+              )}
+              {accessions.length > 0 && (
+                <button
+                  onClick={() => setShowConfirmRevealAllAcc(true)}
+                  disabled={revealingAllAcc}
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {revealingAllAcc ? "Revealing..." : "Reveal All Accessions"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <DataTable
           columns={[
@@ -396,6 +482,9 @@ export default function StudyDetail() {
               key: "accession",
               header: "Accession #",
               render: (a: AccessionMapping) => {
+                if (!isBroker) {
+                  return <span className="text-xs text-gray-400">***</span>;
+                }
                 const revealed = revealedAccessions[a.id];
                 if (revealed) {
                   return (
@@ -430,7 +519,9 @@ export default function StudyDetail() {
               key: "subject",
               header: "Subject ID",
               render: (a: AccessionMapping) =>
-                revealedAccessions[a.id]?.subject ?? "—",
+                isBroker
+                  ? (revealedAccessions[a.id]?.subject ?? "\u2014")
+                  : "\u2014",
             },
             {
               key: "dataset",
@@ -453,6 +544,72 @@ export default function StudyDetail() {
           ]}
           data={accessions}
         />
+      </section>
+
+      {/* Reidentification Requests */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Reidentification Requests ({reidentRequests.length})
+          </h2>
+          {canRequestReident && (
+            <button
+              onClick={() => setShowReidentModal(true)}
+              className="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700"
+            >
+              Request Reidentification
+            </button>
+          )}
+        </div>
+        {reidentRequests.length === 0 ? (
+          <p className="text-sm text-gray-500">No reidentification requests.</p>
+        ) : (
+          <div className="space-y-3">
+            {reidentRequests.map((req) => (
+              <div
+                key={req.id}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {req.requested_by}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(req.created_at).toLocaleString()}
+                    </span>
+                    <StatusBadge status={req.status} />
+                  </div>
+                  {isBroker && req.status === "pending" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleResolve(req.id, "completed")}
+                        disabled={resolvingId === req.id}
+                        className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Complete
+                      </button>
+                      <button
+                        onClick={() => handleResolve(req.id, "denied")}
+                        disabled={resolvingId === req.id}
+                        className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Deny
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 text-sm text-gray-700">{req.message}</p>
+                {req.resolved_at && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Resolved by {req.resolved_by} on{" "}
+                    {new Date(req.resolved_at).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Dialogs */}
@@ -478,6 +635,17 @@ export default function StudyDetail() {
           onUploaded={() => {
             setShowUpload(false);
             loadAll();
+          }}
+        />
+      )}
+
+      {showReidentModal && (
+        <ReidentificationModal
+          studyId={id!}
+          onClose={() => setShowReidentModal(false)}
+          onCreated={() => {
+            setShowReidentModal(false);
+            api.listReidentificationRequests(id!).then(setReidentRequests);
           }}
         />
       )}
@@ -655,6 +823,77 @@ function UploadDatasetModal({
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {uploading ? "Uploading..." : "Upload"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ReidentificationModal({
+  studyId,
+  onClose,
+  onCreated,
+}: {
+  studyId: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      await api.createReidentificationRequest(studyId, message);
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit request");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2 className="mb-4 text-lg font-semibold">Request Reidentification</h2>
+        <p className="mb-4 text-sm text-gray-600">
+          Describe which patients need to be reidentified and why. A broker will
+          review your request.
+        </p>
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        <label className="mb-3 block">
+          <span className="text-sm font-medium text-gray-700">Message</span>
+          <textarea
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            rows={4}
+            maxLength={2000}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            required
+          />
+        </label>
+        <div className="mt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!message.trim() || submitting}
+            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+          >
+            {submitting ? "Submitting..." : "Submit Request"}
           </button>
         </div>
       </form>

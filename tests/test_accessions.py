@@ -261,3 +261,37 @@ class TestAccessionEndpoints:
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
         assert resp.json()["accessions"] == []
+
+
+RESEARCHER = {"X-User-Role": "researcher"}
+
+
+class TestAccessionRoleAccess:
+    @pytest.fixture
+    async def uploaded_study(self, client, study_with_key):
+        sid = study_with_key
+        await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json=_upload_payload([
+                {"mrn": "MRN-R1", "subject_id": "SUBJ-R1", "accession_number": "ACC-R1"},
+            ]),
+        )
+        return sid
+
+    async def test_researcher_cannot_reveal_all(self, client, uploaded_study):
+        sid = uploaded_study
+        resp = await client.get(
+            f"/api/v1/studies/{sid}/accessions/reveal-all",
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403
+
+    async def test_researcher_cannot_reveal_one(self, client, uploaded_study):
+        sid = uploaded_study
+        accessions = (await client.get(f"/api/v1/studies/{sid}/accessions")).json()
+        acc_id = accessions[0]["id"]
+        resp = await client.get(
+            f"/api/v1/studies/{sid}/accessions/{acc_id}/reveal",
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403

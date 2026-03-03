@@ -66,9 +66,11 @@ Airlock doesn't record which deidentification profile/options were applied. Addi
 
 HIPAA allows re-identification for clinical reasons (incidental findings). Airlock has the reveal endpoints, but there's no formalized re-identification request workflow with IRB approval tracking.
 
-### 6. Key destruction policy
+### 6. Key destruction policy — partially resolved
 
-Best practice is to define retention schedules for crosswalk data aligned with the IRB protocol. Airlock has study lifecycle states (draft→active→completed→archived) but no key/crosswalk destruction mechanism.
+Studies now have an optional `expiration_alert_date` field. A `GET /api/v1/studies/expiring` endpoint returns non-archived studies at or past their alert date, suitable for polling by external cron/monitoring (e.g., cron + email, Slack webhook). The frontend surfaces expired studies with a red badge in the study list and detail views.
+
+**Remaining work:** actual key/crosswalk destruction mechanism, notification delivery infrastructure (SMTP, Slack), and background scheduler integration.
 
 ## Summary
 

@@ -1,9 +1,10 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -23,10 +24,12 @@ class Base(DeclarativeBase):
 
 
 class StudyStatus(str, enum.Enum):
+    requested = "requested"
     draft = "draft"
     active = "active"
     completed = "completed"
     archived = "archived"
+    rejected = "rejected"
 
 
 class DatasetType(str, enum.Enum):
@@ -43,6 +46,12 @@ class TemporalPolicy(str, enum.Enum):
     unshifted = "unshifted"
 
 
+class ReidentificationStatus(str, enum.Enum):
+    pending = "pending"
+    completed = "completed"
+    denied = "denied"
+
+
 class Study(Base):
     __tablename__ = "studies"
 
@@ -54,12 +63,14 @@ class Study(Base):
     description: Mapped[str | None] = mapped_column(Text)
     pi_name: Mapped[str] = mapped_column(String(200), nullable=False)
     requestor: Mapped[str | None] = mapped_column(String(200))
+    requested_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[StudyStatus] = mapped_column(
         Enum(StudyStatus), default=StudyStatus.draft, nullable=False
     )
     temporal_policy: Mapped[TemporalPolicy] = mapped_column(
         Enum(TemporalPolicy), default=TemporalPolicy.removed, nullable=False
     )
+    expiration_alert_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -70,6 +81,9 @@ class Study(Base):
     project_key: Mapped["ProjectHashKey | None"] = relationship(back_populates="study")
     patient_mappings: Mapped[list["PatientMapping"]] = relationship(back_populates="study")
     dataset_manifests: Mapped[list["DatasetManifest"]] = relationship(back_populates="study")
+    reidentification_requests: Mapped[list["ReidentificationRequest"]] = relationship(
+        back_populates="study"
+    )
 
 
 class GlobalHashKey(Base):
@@ -191,6 +205,29 @@ class AccessionMapping(Base):
     dataset_manifest: Mapped["DatasetManifest"] = relationship(
         back_populates="accession_mappings"
     )
+
+
+class ReidentificationRequest(Base):
+    __tablename__ = "reidentification_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    study_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("studies.id"), nullable=False
+    )
+    requested_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[ReidentificationStatus] = mapped_column(
+        Enum(ReidentificationStatus), default=ReidentificationStatus.pending, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[str | None] = mapped_column(String(200))
+
+    study: Mapped["Study"] = relationship(back_populates="reidentification_requests")
 
 
 class AuditLog(Base):
