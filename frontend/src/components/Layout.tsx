@@ -5,11 +5,11 @@ import { useRole } from "../context/RoleContext";
 const NAV: Array<{
   to: string;
   label: string | { broker: string; researcher: string };
-  brokerOnly: boolean;
+  role?: "broker" | "researcher";
 }> = [
-  { to: "/", label: "Studies", brokerOnly: false },
-  { to: "/new", label: { broker: "New Study", researcher: "New Request" }, brokerOnly: false },
-  { to: "/keys", label: "Key Management", brokerOnly: true },
+  { to: "/", label: "Studies" },
+  { to: "/new", label: "New Request", role: "researcher" },
+  { to: "/keys", label: "Key Management", role: "broker" },
 ];
 
 export default function Layout() {
@@ -27,7 +27,7 @@ export default function Layout() {
             </Link>
             <div className="flex items-center gap-6">
               <nav className="flex gap-6">
-                {NAV.filter((item) => !item.brokerOnly || role === "broker").map(
+                {NAV.filter((item) => !item.role || item.role === role).map(
                   (item) => {
                     const label =
                       typeof item.label === "string" ? item.label : item.label[role];

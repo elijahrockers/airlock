@@ -16,11 +16,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    temporalpolicy = sa.Enum("removed", "shifted", "unshifted", name="temporalpolicy")
+    temporalpolicy.create(op.get_bind(), checkfirst=True)
     op.add_column(
         "studies",
         sa.Column(
             "temporal_policy",
-            sa.Enum("removed", "shifted", "unshifted", name="temporalpolicy"),
+            temporalpolicy,
             server_default="removed",
             nullable=False,
         ),

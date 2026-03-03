@@ -1,12 +1,22 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, TemporalPolicy, validateCsvHeaders } from "../api/client";
+import { api, TemporalPolicy } from "../api/client";
 import { useRole } from "../context/RoleContext";
 
 export default function NewStudy() {
   const navigate = useNavigate();
   const { role } = useRole();
-  const isResearcher = role === "researcher";
+
+  if (role === "broker") {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+        <h2 className="text-lg font-semibold text-amber-900">Researchers Only</h2>
+        <p className="mt-2 text-sm text-amber-800">
+          Only researchers can create new study requests. Switch to the researcher role to submit a request.
+        </p>
+      </div>
+    );
+  }
 
   const [form, setForm] = useState({
     irb_pro_number: "",
@@ -20,42 +30,6 @@ export default function NewStudy() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // CSV state
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvError, setCsvError] = useState("");
-  const [csvValid, setCsvValid] = useState(false);
-
-  const handleCsvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
-    setCsvFile(file);
-    setCsvError("");
-    setCsvValid(false);
-
-    if (!file) return;
-
-    if (!file.name.endsWith(".csv")) {
-      setCsvError("File must be a .csv");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result as string;
-      const firstLine = text.split(/\r?\n/)[0];
-      if (!firstLine) {
-        setCsvError("CSV file appears to be empty");
-        return;
-      }
-      const result = validateCsvHeaders(firstLine);
-      if (!result.valid) {
-        setCsvError(`Missing required columns: ${result.missing.join(", ")}`);
-      } else {
-        setCsvValid(true);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -67,10 +41,6 @@ export default function NewStudy() {
         expiration_alert_date: expiration_alert_date || null,
       });
 
-      if (csvFile && csvValid) {
-        await api.uploadDatasetCsv(study.id, csvFile);
-      }
-
       navigate(`/studies/${study.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create study");
@@ -81,7 +51,7 @@ export default function NewStudy() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold text-gray-900">
-        {isResearcher ? "New Data Request" : "New Study"}
+        New Data Request
       </h1>
 
       <form onSubmit={submit} className="mx-auto max-w-2xl">
@@ -145,39 +115,6 @@ export default function NewStudy() {
           </div>
         </div>
 
-        {isResearcher && (
-          <div className="mt-4 space-y-4 rounded-lg border border-gray-200 bg-white p-6">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Patient / Accession CSV</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Upload a CSV with columns: MRN, Subject ID, Accession Number.
-                Headers are case-insensitive.
-              </p>
-            </div>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">CSV File (optional)</span>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleCsvChange}
-                className="mt-1 block w-full text-sm"
-              />
-            </label>
-            {csvError && (
-              <div className="rounded-md border border-red-200 bg-red-50 p-3">
-                <p className="text-sm text-red-700">{csvError}</p>
-              </div>
-            )}
-            {csvValid && csvFile && (
-              <div className="rounded-md border border-green-200 bg-green-50 p-3">
-                <p className="text-sm text-green-700">
-                  Headers valid &mdash; {csvFile.name} ready to upload
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
@@ -188,14 +125,10 @@ export default function NewStudy() {
           </button>
           <button
             type="submit"
-            disabled={submitting || (!!csvFile && !csvValid)}
+            disabled={submitting}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {submitting
-              ? "Submitting..."
-              : isResearcher
-                ? "Submit Request"
-                : "Create"}
+            {submitting ? "Submitting..." : "Submit Request"}
           </button>
         </div>
       </form>

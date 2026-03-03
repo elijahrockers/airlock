@@ -1,5 +1,7 @@
 import pytest
 
+RESEARCHER = {"X-User-Role": "researcher"}
+
 
 class TestGlobalKeys:
     async def test_rotate_creates_key(self, client):
@@ -40,6 +42,7 @@ class TestKeyExport:
                 "title": "Key Export Test",
                 "pi_name": "Dr. Key",
             },
+            headers=RESEARCHER,
         )
         return resp.json()["id"]
 
@@ -69,6 +72,7 @@ class TestKeyExport:
                 "pi_name": "Dr. Key Shifted",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         study_id = resp.json()["id"]
         resp = await client.get(f"/api/v1/keys/study/{study_id}/export")
@@ -82,9 +86,6 @@ class TestKeyExport:
         assert resp.status_code == 404
 
 
-RESEARCHER = {"X-User-Role": "researcher"}
-
-
 class TestKeyRoleAccess:
     async def test_researcher_cannot_rotate(self, client):
         resp = await client.post(
@@ -93,7 +94,6 @@ class TestKeyRoleAccess:
         assert resp.status_code == 403
 
     async def test_researcher_cannot_export(self, client):
-        # Create study as broker so it exists
         await client.post("/api/v1/keys/global/rotate")
         resp = await client.post(
             "/api/v1/studies",
@@ -102,6 +102,7 @@ class TestKeyRoleAccess:
                 "title": "Key Role Test",
                 "pi_name": "Dr. KeyRole",
             },
+            headers=RESEARCHER,
         )
         study_id = resp.json()["id"]
         resp = await client.get(

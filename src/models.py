@@ -24,8 +24,8 @@ class Base(DeclarativeBase):
 
 
 class StudyStatus(str, enum.Enum):
-    requested = "requested"
-    draft = "draft"
+    pending_researcher = "pending_researcher"
+    pending_broker = "pending_broker"
     active = "active"
     completed = "completed"
     archived = "archived"
@@ -38,6 +38,11 @@ class DatasetType(str, enum.Enum):
     pathology = "pathology"
     genomics = "genomics"
     other = "other"
+
+
+class DatasetStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
 
 
 class TemporalPolicy(str, enum.Enum):
@@ -65,7 +70,7 @@ class Study(Base):
     requestor: Mapped[str | None] = mapped_column(String(200))
     requested_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[StudyStatus] = mapped_column(
-        Enum(StudyStatus), default=StudyStatus.draft, nullable=False
+        Enum(StudyStatus), default=StudyStatus.pending_researcher, nullable=False
     )
     temporal_policy: Mapped[TemporalPolicy] = mapped_column(
         Enum(TemporalPolicy), default=TemporalPolicy.removed, nullable=False
@@ -163,6 +168,11 @@ class DatasetManifest(Base):
     description: Mapped[str | None] = mapped_column(Text)
     record_count: Mapped[int | None] = mapped_column(Integer)
     metadata_json: Mapped[dict | None] = mapped_column(JSON)
+    status: Mapped[DatasetStatus] = mapped_column(
+        Enum(DatasetStatus), default=DatasetStatus.pending, nullable=False
+    )
+    approved_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

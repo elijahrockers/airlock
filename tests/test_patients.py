@@ -1,5 +1,7 @@
 import pytest
 
+RESEARCHER = {"X-User-Role": "researcher"}
+
 
 @pytest.fixture
 async def study_id(client):
@@ -10,6 +12,7 @@ async def study_id(client):
             "title": "Patient Test Study",
             "pi_name": "Dr. Patient",
         },
+        headers=RESEARCHER,
     )
     return resp.json()["id"]
 
@@ -110,6 +113,7 @@ class TestPatientMappings:
                 "title": "Cross Study Reveal Test",
                 "pi_name": "Dr. Cross",
             },
+            headers=RESEARCHER,
         )
         other_study_id = resp.json()["id"]
 
@@ -164,6 +168,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. Offset",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         resp = await client.post(
@@ -188,6 +193,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. Bulk",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         await client.post(
@@ -215,6 +221,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. Det",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         resp = await client.post(
@@ -239,6 +246,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. Offset",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         await client.post(
@@ -279,6 +287,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. NotFound",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         resp = await client.get(
@@ -296,6 +305,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. Match",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         resp = await client.post(
@@ -322,6 +332,7 @@ class TestPatientMappings:
                 "pi_name": "Dr. Det",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         shifted_study_id = resp.json()["id"]
         await client.post(
@@ -347,6 +358,7 @@ class TestPatientMappings:
                 "title": "Empty Reveal Test",
                 "pi_name": "Dr. Empty",
             },
+            headers=RESEARCHER,
         )
         empty_study_id = resp.json()["id"]
 
@@ -356,9 +368,6 @@ class TestPatientMappings:
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
         assert resp.json()["patients"] == []
-
-
-RESEARCHER = {"X-User-Role": "researcher"}
 
 
 class TestPatientRoleAccess:
@@ -372,6 +381,7 @@ class TestPatientRoleAccess:
                 "pi_name": "Dr. Role",
                 "temporal_policy": "shifted",
             },
+            headers=RESEARCHER,
         )
         study_id = resp.json()["id"]
         resp = await client.post(

@@ -131,16 +131,16 @@ export default function StudyDetail() {
     }
   };
 
-  const handleApprove = async () => {
-    if (!id) return;
-    const updated = await api.approveStudy(id);
-    setStudy(updated);
-  };
-
   const handleReject = async () => {
     if (!id) return;
     const updated = await api.rejectStudy(id);
     setStudy(updated);
+  };
+
+  const handleApproveDataset = async (datasetId: string) => {
+    if (!id) return;
+    await api.approveDataset(id, datasetId);
+    loadAll();
   };
 
   const handleResolve = async (requestId: string, status: "completed" | "denied") => {
@@ -155,12 +155,12 @@ export default function StudyDetail() {
   };
 
   const canRequestReident =
-    !isBroker && study?.status !== "requested" && study?.status !== "rejected" && study?.status !== "archived";
+    !isBroker && study?.status !== "pending_researcher" && study?.status !== "rejected" && study?.status !== "archived";
 
   if (!study) return <p className="text-gray-500">Loading...</p>;
 
   const expandedDataset = datasets.find((d) => d.id === expandedDatasetId);
-  const canUpload = isBroker || (study.status === "requested" && study.requested_by !== null);
+  const canUpload = !isBroker && (study.status === "pending_researcher" || study.status === "active");
 
   return (
     <div className="space-y-8">
@@ -169,21 +169,13 @@ export default function StudyDetail() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">{study.title}</h1>
           <StatusBadge status={study.status} />
-          {isBroker && study.status === "requested" && (
-            <div className="flex gap-2">
-              <button
-                onClick={handleApprove}
-                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
-              >
-                Approve
-              </button>
-              <button
-                onClick={handleReject}
-                className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
-              >
-                Reject
-              </button>
-            </div>
+          {isBroker && (study.status === "pending_researcher" || study.status === "pending_broker") && (
+            <button
+              onClick={handleReject}
+              className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+            >
+              Reject
+            </button>
           )}
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
@@ -341,6 +333,22 @@ export default function StudyDetail() {
         />
       </section>
 
+      {/* Researcher guidance banners */}
+      {!isBroker && study.status === "pending_researcher" && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm text-blue-800">
+            Upload your patient/accession CSV below to submit this study for broker review.
+          </p>
+        </div>
+      )}
+      {!isBroker && study.status === "pending_broker" && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+          <p className="text-sm text-indigo-800">
+            Your dataset has been submitted and is awaiting broker approval.
+          </p>
+        </div>
+      )}
+
       {/* Dataset Manifests */}
       <section>
         <div className="mb-3 flex items-center justify-between">
@@ -373,6 +381,26 @@ export default function StudyDetail() {
               header: "Records",
               render: (d: DatasetManifest) =>
                 d.record_count?.toLocaleString() ?? "\u2014",
+            },
+            {
+              key: "status",
+              header: "Status",
+              render: (d: DatasetManifest) => (
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={d.status} />
+                  {isBroker && d.status === "pending" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApproveDataset(d.id);
+                      }}
+                      className="rounded-md bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700"
+                    >
+                      Approve
+                    </button>
+                  )}
+                </div>
+              ),
             },
             {
               key: "keyver",

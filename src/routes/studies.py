@@ -40,21 +40,22 @@ async def create_study(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if user.role != UserRole.researcher:
+        raise HTTPException(status_code=403, detail="Only researchers can create studies")
+
     data = body.model_dump()
-    if user.role == UserRole.researcher:
-        data["status"] = StudyStatus.requested
-        data["requested_by"] = user.username
+    data["status"] = StudyStatus.pending_researcher
+    data["requested_by"] = user.username
     study = Study(**data)
     db.add(study)
     await db.flush()
 
     await create_project_key_for_study(db, study.id)
 
-    action = "request" if user.role == UserRole.researcher else "create"
     await log_action(
         db,
         actor=user.username,
-        action=action,
+        action="request",
         resource_type="study",
         resource_id=str(study.id),
         detail={"irb_pro_number": study.irb_pro_number},
@@ -79,31 +80,6 @@ async def list_expiring_studies(
     return result.scalars().all()
 
 
-@router.post("/{study_id}/approve", response_model=StudyResponse)
-async def approve_study(
-    study_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_broker),
-):
-    study = await db.get(Study, study_id)
-    if not study:
-        raise HTTPException(status_code=404, detail="Study not found")
-    if study.status != StudyStatus.requested:
-        raise HTTPException(status_code=409, detail="Study is not in 'requested' status")
-
-    study.status = StudyStatus.active
-    await log_action(
-        db,
-        actor=user.username,
-        action="approve",
-        resource_type="study",
-        resource_id=str(study.id),
-    )
-    await db.commit()
-    await db.refresh(study)
-    return study
-
-
 @router.post("/{study_id}/reject", response_model=StudyResponse)
 async def reject_study(
     study_id: uuid.UUID,
@@ -113,8 +89,8 @@ async def reject_study(
     study = await db.get(Study, study_id)
     if not study:
         raise HTTPException(status_code=404, detail="Study not found")
-    if study.status != StudyStatus.requested:
-        raise HTTPException(status_code=409, detail="Study is not in 'requested' status")
+    if study.status not in (StudyStatus.pending_researcher, StudyStatus.pending_broker):
+        raise HTTPException(status_code=409, detail="Study is not in a pending status")
 
     study.status = StudyStatus.rejected
     await log_action(
@@ -249,9 +225,9 @@ async def update_study(
     if user.role == UserRole.researcher:
         if study.requested_by != user.username:
             raise HTTPException(status_code=403, detail="Access denied")
-        if study.status != StudyStatus.requested:
+        if study.status != StudyStatus.pending_researcher:
             raise HTTPException(
-                status_code=403, detail="Can only update studies in 'requested' status"
+                status_code=403, detail="Can only update studies in 'pending_researcher' status"
             )
 
     updates = body.model_dump(exclude_unset=True)

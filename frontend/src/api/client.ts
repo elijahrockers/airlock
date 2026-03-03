@@ -39,7 +39,7 @@ export interface Study {
   pi_name: string;
   requestor: string | null;
   requested_by: string | null;
-  status: "requested" | "draft" | "active" | "completed" | "archived" | "rejected";
+  status: "pending_researcher" | "pending_broker" | "active" | "completed" | "archived" | "rejected";
   temporal_policy: TemporalPolicy;
   expiration_alert_date: string | null;
   created_at: string;
@@ -78,6 +78,9 @@ export interface DatasetManifest {
   description: string | null;
   record_count: number | null;
   metadata_json: Record<string, unknown> | null;
+  status: "pending" | "approved";
+  approved_by: string | null;
+  approved_at: string | null;
   created_at: string;
 }
 
@@ -115,25 +118,6 @@ export interface ReidentificationRequest {
   resolved_by: string | null;
 }
 
-const SUBJECT_ID_ALIASES = ["subject_id", "subject id"];
-const ACCESSION_ALIASES = ["accession_number", "accession number", "accession"];
-
-export function validateCsvHeaders(
-  headerLine: string,
-): { valid: boolean; missing: string[] } {
-  const headers = headerLine
-    .replace(/^\uFEFF/, "") // strip BOM
-    .split(",")
-    .map((h) => h.trim().toLowerCase());
-
-  const missing: string[] = [];
-  if (!headers.includes("mrn")) missing.push("MRN");
-  if (!SUBJECT_ID_ALIASES.some((a) => headers.includes(a))) missing.push("Subject ID");
-  if (!ACCESSION_ALIASES.some((a) => headers.includes(a))) missing.push("Accession Number");
-
-  return { valid: missing.length === 0, missing };
-}
-
 export const api = {
   listStudies: () => request<Study[]>("/api/v1/studies"),
   listExpiringStudies: () => request<Study[]>("/api/v1/studies/expiring"),
@@ -141,8 +125,6 @@ export const api = {
   createStudy: (data: Partial<Study>) =>
     request<Study>("/api/v1/studies", { method: "POST", body: JSON.stringify(data) }),
 
-  approveStudy: (id: string) =>
-    request<Study>(`/api/v1/studies/${id}/approve`, { method: "POST" }),
   rejectStudy: (id: string) =>
     request<Study>(`/api/v1/studies/${id}/reject`, { method: "POST" }),
 
@@ -198,6 +180,12 @@ export const api = {
     }
     return res.json() as Promise<DatasetUploadResponse>;
   },
+
+  approveDataset: (studyId: string, datasetId: string) =>
+    request<DatasetManifest>(
+      `/api/v1/studies/${studyId}/datasets/${datasetId}/approve`,
+      { method: "POST" },
+    ),
 
   listAccessions: (studyId: string, datasetId?: string) => {
     const params = datasetId ? `?dataset_id=${datasetId}` : "";

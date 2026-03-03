@@ -1,9 +1,11 @@
 import pytest
 
+RESEARCHER = {"X-User-Role": "researcher"}
+
 
 @pytest.fixture
 async def study_with_key(client):
-    """Create a study and ensure a global key exists."""
+    """Create a researcher-owned study in pending_researcher status with a global key."""
     await client.post("/api/v1/keys/global/rotate")
     resp = await client.post(
         "/api/v1/studies",
@@ -12,8 +14,10 @@ async def study_with_key(client):
             "title": "Accession Test Study",
             "pi_name": "Dr. Accession",
         },
+        headers=RESEARCHER,
     )
-    return resp.json()["id"]
+    study_id = resp.json()["id"]
+    return study_id
 
 
 def _upload_payload(records, **kwargs):
@@ -30,6 +34,7 @@ class TestDatasetUpload:
                 {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-002"},
                 {"mrn": "MRN002", "subject_id": "SUBJ-002", "accession_number": "ACC-003"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -52,6 +57,7 @@ class TestDatasetUpload:
             json=_upload_payload([
                 {"mrn": "MRN-EXIST", "subject_id": "SUBJ-EXIST", "accession_number": "ACC-E1"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -67,6 +73,7 @@ class TestDatasetUpload:
                 {"mrn": "MRN-X", "subject_id": "SUBJ-A", "accession_number": "ACC-X1"},
                 {"mrn": "MRN-X", "subject_id": "SUBJ-B", "accession_number": "ACC-X2"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 422
         assert "validation_errors" in resp.json()["detail"]
@@ -79,6 +86,7 @@ class TestDatasetUpload:
                 {"mrn": "MRN-D", "subject_id": "SUBJ-D", "accession_number": "ACC-DUP"},
                 {"mrn": "MRN-D", "subject_id": "SUBJ-D", "accession_number": "ACC-DUP"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 422
         assert "validation_errors" in resp.json()["detail"]
@@ -90,12 +98,14 @@ class TestDatasetUpload:
             json=_upload_payload([
                 {"mrn": "MRN-R", "subject_id": "SUBJ-R", "accession_number": "ACC-REPEAT"},
             ]),
+            headers=RESEARCHER,
         )
         resp = await client.post(
             f"/api/v1/studies/{sid}/datasets/upload",
             json=_upload_payload([
                 {"mrn": "MRN-R", "subject_id": "SUBJ-R", "accession_number": "ACC-REPEAT"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 409
 
@@ -112,6 +122,7 @@ class TestDatasetUpload:
             json=_upload_payload([
                 {"mrn": "MRN-OTHER", "subject_id": "SUBJ-TAKEN", "accession_number": "ACC-T1"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 409
 
@@ -128,6 +139,7 @@ class TestDatasetUpload:
             json=_upload_payload([
                 {"mrn": "MRN-MM", "subject_id": "SUBJ-MM-WRONG", "accession_number": "ACC-MM1"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 409
 
@@ -141,7 +153,7 @@ class TestDatasetUpload:
         assert resp.status_code == 404
 
     async def test_upload_no_global_key(self, client):
-        # Create study without rotating a global key first
+        # Create researcher-owned study without rotating a global key first
         resp = await client.post(
             "/api/v1/studies",
             json={
@@ -149,6 +161,7 @@ class TestDatasetUpload:
                 "title": "No Key Study",
                 "pi_name": "Dr. NoKey",
             },
+            headers=RESEARCHER,
         )
         sid = resp.json()["id"]
         resp = await client.post(
@@ -156,6 +169,7 @@ class TestDatasetUpload:
             json=_upload_payload([
                 {"mrn": "M", "subject_id": "S", "accession_number": "A"},
             ]),
+            headers=RESEARCHER,
         )
         assert resp.status_code == 400
 
@@ -164,8 +178,19 @@ class TestDatasetUpload:
         resp = await client.post(
             f"/api/v1/studies/{sid}/datasets/upload",
             json={"records": []},
+            headers=RESEARCHER,
         )
         assert resp.status_code == 422
+
+    async def test_broker_cannot_upload(self, client, study_with_key):
+        sid = study_with_key
+        resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json=_upload_payload([
+                {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+            ]),
+        )
+        assert resp.status_code == 403
 
 
 class TestAccessionEndpoints:
@@ -179,6 +204,7 @@ class TestAccessionEndpoints:
                 {"mrn": "MRN-A1", "subject_id": "SUBJ-A1", "accession_number": "ACC-A2"},
                 {"mrn": "MRN-A2", "subject_id": "SUBJ-A2", "accession_number": "ACC-A3"},
             ]),
+            headers=RESEARCHER,
         )
         manifest_id = resp.json()["manifest"]["id"]
         return sid, manifest_id
@@ -232,6 +258,7 @@ class TestAccessionEndpoints:
                 "title": "Other Study",
                 "pi_name": "Dr. Other",
             },
+            headers=RESEARCHER,
         )
         other_sid = resp.json()["id"]
 
@@ -255,15 +282,13 @@ class TestAccessionEndpoints:
                 "title": "Empty Accession Study",
                 "pi_name": "Dr. Empty",
             },
+            headers=RESEARCHER,
         )
         sid = resp.json()["id"]
         resp = await client.get(f"/api/v1/studies/{sid}/accessions/reveal-all")
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
         assert resp.json()["accessions"] == []
-
-
-RESEARCHER = {"X-User-Role": "researcher"}
 
 
 class TestAccessionRoleAccess:
@@ -275,6 +300,7 @@ class TestAccessionRoleAccess:
             json=_upload_payload([
                 {"mrn": "MRN-R1", "subject_id": "SUBJ-R1", "accession_number": "ACC-R1"},
             ]),
+            headers=RESEARCHER,
         )
         return sid
 

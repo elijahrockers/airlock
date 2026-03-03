@@ -2,6 +2,9 @@ from datetime import date, timedelta
 
 import pytest
 
+RESEARCHER = {"X-User-Role": "researcher"}
+BROKER = {}  # default role is broker
+
 
 @pytest.fixture
 async def study_payload():
@@ -16,15 +19,29 @@ async def study_payload():
 
 class TestStudyCRUD:
     async def test_create_study(self, client, study_payload):
-        resp = await client.post("/api/v1/studies", json=study_payload)
+        resp = await client.post(
+            "/api/v1/studies", json=study_payload, headers=RESEARCHER
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data["irb_pro_number"] == study_payload["irb_pro_number"]
-        assert data["status"] == "draft"
+        assert data["status"] == "pending_researcher"
+        assert data["requested_by"] == "dev_user"
         assert "id" in data
 
+    async def test_broker_cannot_create_study(self, client, study_payload):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-BRK-FAIL"},
+        )
+        assert resp.status_code == 403
+
     async def test_list_studies(self, client, study_payload):
-        await client.post("/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-LIST-1"})
+        await client.post(
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-LIST-1"},
+            headers=RESEARCHER,
+        )
         resp = await client.get("/api/v1/studies")
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
@@ -32,7 +49,9 @@ class TestStudyCRUD:
 
     async def test_get_study(self, client, study_payload):
         create_resp = await client.post(
-            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-GET-1"}
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-GET-1"},
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
         resp = await client.get(f"/api/v1/studies/{study_id}")
@@ -45,7 +64,9 @@ class TestStudyCRUD:
 
     async def test_update_study(self, client, study_payload):
         create_resp = await client.post(
-            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-UPD-1"}
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-UPD-1"},
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
         resp = await client.patch(
@@ -58,7 +79,9 @@ class TestStudyCRUD:
 
     async def test_default_temporal_policy_is_removed(self, client, study_payload):
         resp = await client.post(
-            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-TP-DEF"}
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-TP-DEF"},
+            headers=RESEARCHER,
         )
         assert resp.status_code == 201
         assert resp.json()["temporal_policy"] == "removed"
@@ -66,14 +89,21 @@ class TestStudyCRUD:
     async def test_create_study_with_shifted(self, client, study_payload):
         resp = await client.post(
             "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-TP-SHIFT", "temporal_policy": "shifted"},
+            json={
+                **study_payload,
+                "irb_pro_number": "PRO-TP-SHIFT",
+                "temporal_policy": "shifted",
+            },
+            headers=RESEARCHER,
         )
         assert resp.status_code == 201
         assert resp.json()["temporal_policy"] == "shifted"
 
     async def test_update_temporal_policy(self, client, study_payload):
         create_resp = await client.post(
-            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-TP-UPD"}
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-TP-UPD"},
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
         resp = await client.patch(
@@ -85,7 +115,9 @@ class TestStudyCRUD:
 
     async def test_archive_study(self, client, study_payload):
         create_resp = await client.post(
-            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-ARC-1"}
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-ARC-1"},
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/v1/studies/{study_id}")
@@ -99,8 +131,12 @@ class TestStudyCRUD:
         alert_date = (date.today() + timedelta(days=90)).isoformat()
         resp = await client.post(
             "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-EXP-1",
-                  "expiration_alert_date": alert_date},
+            json={
+                **study_payload,
+                "irb_pro_number": "PRO-EXP-1",
+                "expiration_alert_date": alert_date,
+            },
+            headers=RESEARCHER,
         )
         assert resp.status_code == 201
         assert resp.json()["expiration_alert_date"] == alert_date
@@ -109,13 +145,16 @@ class TestStudyCRUD:
         resp = await client.post(
             "/api/v1/studies",
             json={**study_payload, "irb_pro_number": "PRO-EXP-2"},
+            headers=RESEARCHER,
         )
         assert resp.status_code == 201
         assert resp.json()["expiration_alert_date"] is None
 
     async def test_update_expiration_alert_date(self, client, study_payload):
         create_resp = await client.post(
-            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-EXP-3"}
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-EXP-3"},
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
         alert_date = (date.today() + timedelta(days=30)).isoformat()
@@ -130,8 +169,12 @@ class TestStudyCRUD:
         alert_date = (date.today() + timedelta(days=60)).isoformat()
         create_resp = await client.post(
             "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-EXP-4",
-                  "expiration_alert_date": alert_date},
+            json={
+                **study_payload,
+                "irb_pro_number": "PRO-EXP-4",
+                "expiration_alert_date": alert_date,
+            },
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
         resp = await client.patch(
@@ -144,22 +187,28 @@ class TestStudyCRUD:
     async def test_list_expiring_studies(self, client, study_payload):
         past = (date.today() - timedelta(days=10)).isoformat()
         future = (date.today() + timedelta(days=90)).isoformat()
-        # Past date — should appear
         await client.post(
             "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-EXPLIST-1",
-                  "expiration_alert_date": past},
+            json={
+                **study_payload,
+                "irb_pro_number": "PRO-EXPLIST-1",
+                "expiration_alert_date": past,
+            },
+            headers=RESEARCHER,
         )
-        # Future date — should not appear
         await client.post(
             "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-EXPLIST-2",
-                  "expiration_alert_date": future},
+            json={
+                **study_payload,
+                "irb_pro_number": "PRO-EXPLIST-2",
+                "expiration_alert_date": future,
+            },
+            headers=RESEARCHER,
         )
-        # No date — should not appear
         await client.post(
             "/api/v1/studies",
             json={**study_payload, "irb_pro_number": "PRO-EXPLIST-3"},
+            headers=RESEARCHER,
         )
         resp = await client.get("/api/v1/studies/expiring")
         assert resp.status_code == 200
@@ -172,11 +221,14 @@ class TestStudyCRUD:
         past = (date.today() - timedelta(days=5)).isoformat()
         create_resp = await client.post(
             "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-EXPARC-1",
-                  "expiration_alert_date": past},
+            json={
+                **study_payload,
+                "irb_pro_number": "PRO-EXPARC-1",
+                "expiration_alert_date": past,
+            },
+            headers=RESEARCHER,
         )
         study_id = create_resp.json()["id"]
-        # Archive the study
         await client.delete(f"/api/v1/studies/{study_id}")
         resp = await client.get("/api/v1/studies/expiring")
         assert resp.status_code == 200
@@ -184,12 +236,8 @@ class TestStudyCRUD:
         assert study_id not in ids
 
 
-RESEARCHER = {"X-User-Role": "researcher"}
-BROKER = {}  # default role is broker
-
-
 class TestResearcherIntake:
-    async def test_researcher_creates_requested_study(self, client, study_payload):
+    async def test_researcher_creates_pending_study(self, client, study_payload):
         resp = await client.post(
             "/api/v1/studies",
             json={**study_payload, "irb_pro_number": "PRO-REQ-1"},
@@ -197,24 +245,10 @@ class TestResearcherIntake:
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data["status"] == "requested"
+        assert data["status"] == "pending_researcher"
         assert data["requested_by"] == "dev_user"
 
-    async def test_broker_creates_draft_study(self, client, study_payload):
-        resp = await client.post(
-            "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-BRK-1"},
-        )
-        assert resp.status_code == 201
-        assert resp.json()["status"] == "draft"
-        assert resp.json()["requested_by"] is None
-
     async def test_researcher_list_scoped(self, client, study_payload):
-        # Broker creates a study (not owned by researcher)
-        await client.post(
-            "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-SCOPE-BRK"},
-        )
         # Researcher creates a study
         await client.post(
             "/api/v1/studies",
@@ -225,27 +259,6 @@ class TestResearcherIntake:
         assert resp.status_code == 200
         irbs = [s["irb_pro_number"] for s in resp.json()]
         assert "PRO-SCOPE-RES" in irbs
-        assert "PRO-SCOPE-BRK" not in irbs
-
-    async def test_researcher_cannot_access_others_study(self, client, study_payload):
-        resp = await client.post(
-            "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-OWN-403"},
-        )
-        study_id = resp.json()["id"]
-        resp = await client.get(f"/api/v1/studies/{study_id}", headers=RESEARCHER)
-        assert resp.status_code == 403
-
-    async def test_approve_study(self, client, study_payload):
-        resp = await client.post(
-            "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-APPROVE"},
-            headers=RESEARCHER,
-        )
-        study_id = resp.json()["id"]
-        resp = await client.post(f"/api/v1/studies/{study_id}/approve")
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "active"
 
     async def test_reject_study(self, client, study_payload):
         resp = await client.post(
@@ -258,28 +271,7 @@ class TestResearcherIntake:
         assert resp.status_code == 200
         assert resp.json()["status"] == "rejected"
 
-    async def test_approve_non_requested_409(self, client, study_payload):
-        resp = await client.post(
-            "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-APP-409"},
-        )
-        study_id = resp.json()["id"]
-        resp = await client.post(f"/api/v1/studies/{study_id}/approve")
-        assert resp.status_code == 409
-
-    async def test_researcher_cannot_approve(self, client, study_payload):
-        resp = await client.post(
-            "/api/v1/studies",
-            json={**study_payload, "irb_pro_number": "PRO-SELF-APP"},
-            headers=RESEARCHER,
-        )
-        study_id = resp.json()["id"]
-        resp = await client.post(
-            f"/api/v1/studies/{study_id}/approve", headers=RESEARCHER
-        )
-        assert resp.status_code == 403
-
-    async def test_researcher_update_own_requested(self, client, study_payload):
+    async def test_researcher_update_own_pending(self, client, study_payload):
         resp = await client.post(
             "/api/v1/studies",
             json={**study_payload, "irb_pro_number": "PRO-RES-UPD"},
@@ -293,8 +285,7 @@ class TestResearcherIntake:
         )
         assert resp.status_code == 200
         assert resp.json()["title"] == "Updated by Researcher"
-        # status should remain requested (silently stripped)
-        assert resp.json()["status"] == "requested"
+        assert resp.json()["status"] == "pending_researcher"
 
     async def test_researcher_cannot_change_status(self, client, study_payload):
         resp = await client.post(
@@ -309,7 +300,7 @@ class TestResearcherIntake:
             headers=RESEARCHER,
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "requested"
+        assert resp.json()["status"] == "pending_researcher"
 
     async def test_researcher_archive_403(self, client, study_payload):
         resp = await client.post(
@@ -324,12 +315,168 @@ class TestResearcherIntake:
         assert resp.status_code == 403
 
 
+class TestDatasetApprovalWorkflow:
+    """Tests for the dataset-driven approval workflow."""
+
+    @pytest.fixture
+    async def researcher_study(self, client, study_payload):
+        """Create a researcher-owned study with a global key."""
+        await client.post("/api/v1/keys/global/rotate")
+        resp = await client.post(
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-WKFL-1"},
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 201
+        return resp.json()["id"]
+
+    async def test_upload_transitions_to_pending_broker(self, client, researcher_study):
+        sid = researcher_study
+        resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["manifest"]["status"] == "pending"
+
+        study = await client.get(f"/api/v1/studies/{sid}")
+        assert study.json()["status"] == "pending_broker"
+
+    async def test_dataset_approval_auto_activates_study(self, client, researcher_study):
+        sid = researcher_study
+        upload_resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        dataset_id = upload_resp.json()["manifest"]["id"]
+
+        resp = await client.post(f"/api/v1/studies/{sid}/datasets/{dataset_id}/approve")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+        assert resp.json()["approved_by"] == "dev_user"
+        assert resp.json()["approved_at"] is not None
+
+        study = await client.get(f"/api/v1/studies/{sid}")
+        assert study.json()["status"] == "active"
+
+    async def test_additional_dataset_on_active_study(self, client, researcher_study):
+        sid = researcher_study
+        # First upload + approve
+        r1 = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        d1_id = r1.json()["manifest"]["id"]
+        await client.post(f"/api/v1/studies/{sid}/datasets/{d1_id}/approve")
+
+        # Second upload on now-active study
+        r2 = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN002", "subject_id": "SUBJ-002", "accession_number": "ACC-002"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        assert r2.status_code == 201
+        assert r2.json()["manifest"]["status"] == "pending"
+
+        # Study stays active
+        study = await client.get(f"/api/v1/studies/{sid}")
+        assert study.json()["status"] == "active"
+
+        # Approve second dataset — study stays active
+        d2_id = r2.json()["manifest"]["id"]
+        resp = await client.post(f"/api/v1/studies/{sid}/datasets/{d2_id}/approve")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+
+        study = await client.get(f"/api/v1/studies/{sid}")
+        assert study.json()["status"] == "active"
+
+    async def test_researcher_cannot_approve_dataset(self, client, researcher_study):
+        sid = researcher_study
+        upload_resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        dataset_id = upload_resp.json()["manifest"]["id"]
+
+        resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/{dataset_id}/approve",
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 403
+
+    async def test_double_approve_dataset_409(self, client, researcher_study):
+        sid = researcher_study
+        upload_resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        dataset_id = upload_resp.json()["manifest"]["id"]
+        await client.post(f"/api/v1/studies/{sid}/datasets/{dataset_id}/approve")
+
+        resp = await client.post(f"/api/v1/studies/{sid}/datasets/{dataset_id}/approve")
+        assert resp.status_code == 409
+
+    async def test_cannot_upload_while_pending_broker(self, client, researcher_study):
+        sid = researcher_study
+        # First upload transitions to pending_broker
+        await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN001", "subject_id": "SUBJ-001", "accession_number": "ACC-001"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        # Second upload should fail because study is now pending_broker
+        resp = await client.post(
+            f"/api/v1/studies/{sid}/datasets/upload",
+            json={
+                "records": [
+                    {"mrn": "MRN002", "subject_id": "SUBJ-002", "accession_number": "ACC-002"},
+                ]
+            },
+            headers=RESEARCHER,
+        )
+        assert resp.status_code == 409
+
+
 class TestReidentificationRequests:
     async def _create_study(self, client, study_payload, irb, headers=None):
         resp = await client.post(
             "/api/v1/studies",
             json={**study_payload, "irb_pro_number": irb},
-            headers=headers or {},
+            headers=headers or RESEARCHER,
         )
         assert resp.status_code == 201
         return resp.json()["id"]
@@ -348,18 +495,6 @@ class TestReidentificationRequests:
         assert data["status"] == "pending"
         assert data["requested_by"] == "dev_user"
         assert data["message"] == "Need to reidentify patient SUBJ-001"
-
-    async def test_researcher_cannot_request_on_others_study(self, client, study_payload):
-        # Broker creates a study (not owned by researcher)
-        study_id = await self._create_study(
-            client, study_payload, "PRO-REID-2"
-        )
-        resp = await client.post(
-            f"/api/v1/studies/{study_id}/reidentification-requests",
-            json={"message": "Trying to access other's study"},
-            headers=RESEARCHER,
-        )
-        assert resp.status_code == 403
 
     async def test_broker_lists_requests(self, client, study_payload):
         study_id = await self._create_study(

@@ -1,23 +1,26 @@
 import csv
 import io
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.audit import log_action
-from src.auth import User, UserRole, get_current_user
+from src.auth import User, UserRole, get_current_user, require_broker
 from src.database import get_db
 from src.models import (
     AccessionMapping,
     DatasetManifest,
+    DatasetStatus,
     DatasetType,
     GlobalHashKey,
     PatientMapping,
     Study,
     StudyStatus,
 )
+from src.notifications import send_approval_email
 from src.schemas import (
     DatasetManifestCreate,
     DatasetManifestResponse,
@@ -105,16 +108,13 @@ async def _process_dataset_upload(
     study = await db.get(Study, study_id)
     if not study:
         raise HTTPException(status_code=404, detail="Study not found")
-    if study.status == StudyStatus.archived:
-        raise HTTPException(status_code=400, detail="Cannot upload to an archived study")
-
-    if user.role == UserRole.researcher:
-        if study.requested_by != user.username:
-            raise HTTPException(status_code=403, detail="Access denied")
-        if study.status != StudyStatus.requested:
-            raise HTTPException(
-                status_code=409, detail="Can only upload to studies in 'requested' status"
-            )
+    if study.status not in (StudyStatus.pending_researcher, StudyStatus.active):
+        raise HTTPException(
+            status_code=409,
+            detail="Can only upload to studies in 'pending_researcher' or 'active' status",
+        )
+    if user.role != UserRole.researcher or study.requested_by != user.username:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Validate active global key
     result = await db.execute(
@@ -210,6 +210,7 @@ async def _process_dataset_upload(
         dataset_type=body.dataset_type,
         description=body.description,
         record_count=len(body.records),
+        status=DatasetStatus.pending,
     )
     db.add(manifest)
     await db.flush()
@@ -240,6 +241,18 @@ async def _process_dataset_upload(
         )
         db.add(acc)
         accessions_created += 1
+
+    # Transition study if this is the first upload
+    if study.status == StudyStatus.pending_researcher:
+        study.status = StudyStatus.pending_broker
+        await log_action(
+            db,
+            actor=user.username,
+            action="submit_for_review",
+            resource_type="study",
+            resource_id=str(study.id),
+            detail={"new_status": "pending_broker"},
+        )
 
     await log_action(
         db,
@@ -319,3 +332,52 @@ async def upload_dataset_csv(
         dataset_type=dataset_type, description=description, records=records
     )
     return await _process_dataset_upload(study_id, body, db, user)
+
+
+@router.post("/{dataset_id}/approve", response_model=DatasetManifestResponse)
+async def approve_dataset(
+    study_id: uuid.UUID,
+    dataset_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_broker),
+):
+    study = await db.get(Study, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+
+    dataset = await db.get(DatasetManifest, dataset_id)
+    if not dataset or dataset.study_id != study_id:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.status != DatasetStatus.pending:
+        raise HTTPException(status_code=409, detail="Dataset is not in 'pending' status")
+
+    dataset.status = DatasetStatus.approved
+    dataset.approved_by = user.username
+    dataset.approved_at = datetime.now(timezone.utc)
+
+    await log_action(
+        db,
+        actor=user.username,
+        action="approve_dataset",
+        resource_type="dataset_manifest",
+        resource_id=str(dataset_id),
+        detail={"study_id": str(study_id)},
+    )
+
+    # Auto-activate study if it's still pending_broker
+    if study.status == StudyStatus.pending_broker:
+        study.status = StudyStatus.active
+        await log_action(
+            db,
+            actor=user.username,
+            action="activate",
+            resource_type="study",
+            resource_id=str(study.id),
+            detail={"trigger": "dataset_approval"},
+        )
+        if study.requested_by:
+            await send_approval_email(study, study.requested_by, db)
+
+    await db.commit()
+    await db.refresh(dataset)
+    return dataset

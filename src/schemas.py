@@ -3,7 +3,13 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from src.models import DatasetType, ReidentificationStatus, StudyStatus, TemporalPolicy
+from src.models import (
+    DatasetStatus,
+    DatasetType,
+    ReidentificationStatus,
+    StudyStatus,
+    TemporalPolicy,
+)
 
 # --- Study ---
 
@@ -127,6 +133,9 @@ class DatasetManifestResponse(BaseModel):
     description: str | None
     record_count: int | None
     metadata_json: dict | None
+    status: DatasetStatus
+    approved_by: str | None
+    approved_at: datetime | None
     created_at: datetime
 
 

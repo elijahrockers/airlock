@@ -8,6 +8,7 @@ from src.models import (
     AccessionMapping,
     Base,
     DatasetManifest,
+    DatasetStatus,
     DatasetType,
     GlobalHashKey,
     PatientMapping,
@@ -44,7 +45,7 @@ STUDIES = [
         "title": "Pathology Slide Anonymization",
         "description": "Deidentification of whole-slide pathology images.",
         "pi_name": "Dr. Lisa Patel",
-        "status": "draft",
+        "status": "pending_broker",
         "temporal_policy": TemporalPolicy.unshifted,
     },
     {
@@ -52,7 +53,7 @@ STUDIES = [
         "title": "Brain MRI Research Dataset Request",
         "description": "Researcher-submitted request for deidentified brain MRI data.",
         "pi_name": "Dr. James Morton",
-        "status": "requested",
+        "status": "pending_researcher",
         "requested_by": "dev_user",
         "temporal_policy": TemporalPolicy.shifted,
         "expiration_alert_date": date.today() + timedelta(days=365),
@@ -140,6 +141,8 @@ async def seed():
             dataset_type=DatasetType.dicom_images,
             description="Cardiac MRI DICOM images — batch 1",
             record_count=len(ACCESSIONS_STUDY_0),
+            status=DatasetStatus.approved,
+            approved_by="dev_user",
         )
         db.add(manifest_0)
 
@@ -151,6 +154,8 @@ async def seed():
             description="Lung CT scans — training set",
             record_count=len(ACCESSIONS_STUDY_1),
             metadata_json={"modality": "CT", "body_part": "chest"},
+            status=DatasetStatus.approved,
+            approved_by="dev_user",
         )
         db.add(manifest_1)
         await db.flush()

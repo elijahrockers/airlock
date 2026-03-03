@@ -1,5 +1,7 @@
 import pytest
 
+RESEARCHER = {"X-User-Role": "researcher"}
+
 
 @pytest.fixture
 async def study_with_key(client):
@@ -12,6 +14,7 @@ async def study_with_key(client):
             "title": "Dataset Test Study",
             "pi_name": "Dr. Dataset",
         },
+        headers=RESEARCHER,
     )
     return resp.json()["id"]
 
