@@ -35,19 +35,24 @@ These are handled by downstream tools (XNAT, CTP) using the exported keys:
 - **Pixel PHI / burned-in annotation cleaning** — OCR detection and redaction
 - **Private tag handling** — vendor-specific safe-list curation
 - **Free-text field scrubbing** — Study Description, Protocol Name, etc.
-- **Date shifting** — consistent per-patient temporal offsets
+- **Date shifting** — Airlock computes the per-patient offset; XNAT applies it to DICOM tags
 
 This is a reasonable architectural boundary. Airlock is the *registry and key vault*; XNAT is the *deidentification engine*.
 
 ## Roadmap — Gaps to Address
 
-### 1. Date-shift offset tracking
+### 1. ~~Date-shift offset tracking~~ ✅ Resolved
 
-PS3.15's "Retain Longitudinal Temporal Information" option requires a consistent per-patient date offset. Airlock doesn't store this today. If the researcher needs temporal data, the offset should be tracked in the crosswalk alongside the MRN mapping.
+Implemented. Studies have a `temporal_policy` (enum: `none`, `shifted`, `removed`) and a per-patient date offset endpoint (`GET /api/v1/studies/{study_id}/patients/date-offset?mrn={mrn}`). When `temporal_policy=shifted`, a deterministic HMAC-based offset (±180 days) is computed per patient and returned to the broker for use in XNAT. The offset is derived from the project key + MRN, so it's consistent across requests without storing additional state. Key export includes the temporal policy so downstream tools know which date handling to apply.
 
-### 2. UID crosswalk
+### 2. ~~UID crosswalk~~ ✅ Resolved — not needed
 
-Airlock tracks accession numbers but not Study/Series/SOP Instance UIDs. In practice XNAT manages UID remapping internally, but if the honest broker needs to re-link deidentified images to originals (e.g., incidental findings), the UID mapping should be recoverable. This may be acceptable if XNAT retains its own mapping.
+After reviewing DICOM PS3.15 UID handling requirements, we determined a UID crosswalk is outside Airlock's scope:
+
+- **PS3.15 Basic Profile requires UID replacement** (action "U") — XNAT generates new UIDs as a one-way operation during deidentification. This is a deidentification engine concern, not a registry concern.
+- **Re-identification uses accession number → PACS, not UID reversal.** The honest broker workflow for incidental findings is: reveal accession number in Airlock → query PACS by accession → retrieve original study. UIDs are not needed for this path.
+- **Airlock's accession crosswalk is sufficient** for all honest broker scenarios: incidental findings, longitudinal linking, and dataset provenance.
+- **UID crosswalks belong to the deidentification engine** (e.g., CTP's IDMap). XNAT/CTP maintain their own UID mappings internally for cross-reference consistency during deidentification.
 
 ### 3. Pixel PHI status tracking
 
@@ -67,4 +72,4 @@ Best practice is to define retention schedules for crosswalk data aligned with t
 
 ## Summary
 
-Airlock handles the **governance layer** — identity crosswalk, key management, audit trail — which is the part most institutions cobble together with spreadsheets, REDCap projects, or ad-hoc databases. It correctly separates this from the **deidentification engine** (XNAT/CTP). The security model (HKDF-derived subkeys, Fernet encryption, HMAC lookups, audit logging) is solid for the crosswalk use case. The main gaps are around tracking what the downstream deidentification engine *actually did* (which PS3.15 profile, pixel screening results, UID mappings, date offsets) — metadata that would make Airlock a complete deidentification governance record rather than just a key vault.
+Airlock handles the **governance layer** — identity crosswalk, key management, audit trail — which is the part most institutions cobble together with spreadsheets, REDCap projects, or ad-hoc databases. It correctly separates this from the **deidentification engine** (XNAT/CTP). The security model (HKDF-derived subkeys, Fernet encryption, HMAC lookups, audit logging) is solid for the crosswalk use case. With date-offset tracking now implemented and the UID crosswalk question resolved, the remaining gaps are around tracking what the downstream deidentification engine *actually did* (which PS3.15 profile, pixel screening results) — metadata that would make Airlock a complete deidentification governance record rather than just a key vault.
