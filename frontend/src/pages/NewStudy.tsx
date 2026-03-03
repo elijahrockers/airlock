@@ -9,7 +9,7 @@ export default function NewStudy() {
 
   if (role === "broker") {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+      <div className="rounded-lg border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-6">
         <h2 className="text-lg font-semibold text-amber-900">Researchers Only</h2>
         <p className="mt-2 text-sm text-amber-800">
           Only researchers can create new study requests. Switch to the researcher role to submit a request.
@@ -56,12 +56,12 @@ export default function NewStudy() {
 
       <form onSubmit={submit} className="mx-auto max-w-2xl">
         {error && (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3">
+          <div className="mb-4 rounded-md border border-red-200 border-l-4 border-l-red-400 bg-red-50 p-3">
             <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
 
-        <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6">
+        <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-gray-900">Study Details</h2>
 
           {(["irb_pro_number", "title", "pi_name", "requestor"] as const).map((field) => (
@@ -70,7 +70,7 @@ export default function NewStudy() {
                 {field.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
               </span>
               <input
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
                 value={form[field]}
                 onChange={(e) => setForm({ ...form, [field]: e.target.value })}
                 required={field !== "requestor"}
@@ -95,7 +95,7 @@ export default function NewStudy() {
                 onChange={(e) =>
                   setForm({ ...form, temporal_policy: e.target.value as TemporalPolicy })
                 }
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="removed">Removed</option>
                 <option value="shifted">Shifted</option>
@@ -109,7 +109,7 @@ export default function NewStudy() {
                 type="date"
                 value={form.expiration_alert_date}
                 onChange={(e) => setForm({ ...form, expiration_alert_date: e.target.value })}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
               />
             </label>
           </div>
@@ -119,14 +119,14 @@ export default function NewStudy() {
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700 disabled:opacity-50"
           >
             {submitting ? "Submitting..." : "Submit Request"}
           </button>

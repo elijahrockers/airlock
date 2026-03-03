@@ -157,7 +157,12 @@ export default function StudyDetail() {
   const canRequestReident =
     !isBroker && study?.status !== "pending_researcher" && study?.status !== "rejected" && study?.status !== "archived";
 
-  if (!study) return <p className="text-gray-500">Loading...</p>;
+  if (!study) return (
+    <div className="flex items-center justify-center gap-3 py-12">
+      <div className="spinner" />
+      <span className="text-sm text-gray-500">Loading study...</span>
+    </div>
+  );
 
   const expandedDataset = datasets.find((d) => d.id === expandedDatasetId);
   const canUpload = !isBroker && (study.status === "pending_researcher" || study.status === "active");
@@ -172,7 +177,7 @@ export default function StudyDetail() {
           {isBroker && (study.status === "pending_researcher" || study.status === "pending_broker") && (
             <button
               onClick={handleReject}
-              className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-red-700"
             >
               Reject
             </button>
@@ -239,7 +244,7 @@ export default function StudyDetail() {
               {Object.keys(revealedMrns).length > 0 && (
                 <button
                   onClick={() => setRevealedMrns({})}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
                 >
                   Hide All MRNs
                 </button>
@@ -247,7 +252,7 @@ export default function StudyDetail() {
               <button
                 onClick={() => setShowConfirmRevealAll(true)}
                 disabled={revealingAll}
-                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-amber-700 disabled:opacity-50"
               >
                 {revealingAll ? "Revealing..." : "Reveal All MRNs"}
               </button>
@@ -335,14 +340,14 @@ export default function StudyDetail() {
 
       {/* Researcher guidance banners */}
       {!isBroker && study.status === "pending_researcher" && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="rounded-lg border border-blue-200 border-l-4 border-l-blue-400 bg-blue-50 p-4">
           <p className="text-sm text-blue-800">
             Upload your patient/accession CSV below to submit this study for broker review.
           </p>
         </div>
       )}
       {!isBroker && study.status === "pending_broker" && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+        <div className="rounded-lg border border-indigo-200 border-l-4 border-l-indigo-400 bg-indigo-50 p-4">
           <p className="text-sm text-indigo-800">
             Your dataset has been submitted and is awaiting broker approval.
           </p>
@@ -358,7 +363,7 @@ export default function StudyDetail() {
           {canUpload && (
             <button
               onClick={() => setShowUpload(true)}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-blue-700"
             >
               Upload Dataset
             </button>
@@ -394,7 +399,7 @@ export default function StudyDetail() {
                         e.stopPropagation();
                         handleApproveDataset(d.id);
                       }}
-                      className="rounded-md bg-green-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-green-700"
+                      className="rounded-md bg-green-600 px-2 py-0.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-green-700"
                     >
                       Approve
                     </button>
@@ -432,14 +437,14 @@ export default function StudyDetail() {
           }
         />
         {expandedDataset && (
-          <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900">
                 Dataset Details
               </h3>
               <button
                 onClick={() => setExpandedDatasetId(null)}
-                className="text-xs text-gray-500 hover:text-gray-700"
+                className="text-xs text-gray-500 transition-colors duration-150 hover:text-gray-700"
               >
                 Close
               </button>
@@ -487,7 +492,7 @@ export default function StudyDetail() {
               {Object.keys(revealedAccessions).length > 0 && (
                 <button
                   onClick={() => setRevealedAccessions({})}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
                 >
                   Hide All Accessions
                 </button>
@@ -496,7 +501,7 @@ export default function StudyDetail() {
                 <button
                   onClick={() => setShowConfirmRevealAllAcc(true)}
                   disabled={revealingAllAcc}
-                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-amber-700 disabled:opacity-50"
                 >
                   {revealingAllAcc ? "Revealing..." : "Reveal All Accessions"}
                 </button>
@@ -583,7 +588,7 @@ export default function StudyDetail() {
           {canRequestReident && (
             <button
               onClick={() => setShowReidentModal(true)}
-              className="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700"
+              className="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-purple-700"
             >
               Request Reidentification
             </button>
@@ -596,7 +601,7 @@ export default function StudyDetail() {
             {reidentRequests.map((req) => (
               <div
                 key={req.id}
-                className="rounded-lg border border-gray-200 bg-white p-4"
+                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow duration-150 hover:shadow-md"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -613,14 +618,14 @@ export default function StudyDetail() {
                       <button
                         onClick={() => handleResolve(req.id, "completed")}
                         disabled={resolvingId === req.id}
-                        className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-green-700 disabled:opacity-50"
                       >
                         Complete
                       </button>
                       <button
                         onClick={() => handleResolve(req.id, "denied")}
                         disabled={resolvingId === req.id}
-                        className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                        className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-red-700 disabled:opacity-50"
                       >
                         Deny
                       </button>
@@ -752,8 +757,8 @@ function UploadDatasetModal({
 
   if (result) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="modal-panel w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
           <h2 className="mb-4 text-lg font-semibold text-green-700">
             Upload Complete
           </h2>
@@ -780,7 +785,7 @@ function UploadDatasetModal({
           <div className="mt-4 flex justify-end">
             <button
               onClick={onUploaded}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
             >
               Done
             </button>
@@ -791,10 +796,10 @@ function UploadDatasetModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
+        className="modal-panel w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
       >
         <h2 className="mb-4 text-lg font-semibold">Upload Dataset</h2>
         <p className="mb-4 text-sm text-gray-600">
@@ -818,7 +823,7 @@ function UploadDatasetModal({
           <select
             value={datasetType}
             onChange={(e) => setDatasetType(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
           >
             {DATASET_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -832,7 +837,7 @@ function UploadDatasetModal({
             Description (optional)
           </span>
           <input
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -841,14 +846,14 @@ function UploadDatasetModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm"
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm transition-colors duration-150 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!file || uploading}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700 disabled:opacity-50"
           >
             {uploading ? "Uploading..." : "Upload"}
           </button>
@@ -886,10 +891,10 @@ function ReidentificationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
+        className="modal-panel w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
       >
         <h2 className="mb-4 text-lg font-semibold">Request Reidentification</h2>
         <p className="mb-4 text-sm text-gray-600">
@@ -900,7 +905,7 @@ function ReidentificationModal({
         <label className="mb-3 block">
           <span className="text-sm font-medium text-gray-700">Message</span>
           <textarea
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             rows={4}
             maxLength={2000}
             value={message}
@@ -912,14 +917,14 @@ function ReidentificationModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm"
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm transition-colors duration-150 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!message.trim() || submitting}
-            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-purple-700 disabled:opacity-50"
           >
             {submitting ? "Submitting..." : "Submit Request"}
           </button>

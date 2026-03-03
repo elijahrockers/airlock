@@ -12,7 +12,7 @@ interface Props<T> {
 
 export default function DataTable<T>({ columns, data, onRowClick }: Props<T>) {
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200">
+    <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
@@ -30,7 +30,7 @@ export default function DataTable<T>({ columns, data, onRowClick }: Props<T>) {
           {data.map((row, i) => (
             <tr
               key={i}
-              className={onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}
+              className={onRowClick ? "cursor-pointer transition-colors duration-150 hover:bg-gray-50" : ""}
               onClick={() => onRowClick?.(row)}
             >
               {columns.map((col) => (

@@ -80,7 +80,7 @@ export default function StudyList() {
   const SortHeader = ({ label, col }: { label: string; col: SortKey }) => (
     <button
       onClick={() => handleSort(col)}
-      className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
+      className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-gray-500 transition-colors duration-150 hover:text-gray-700"
     >
       {label}
       {sortKey === col && (
@@ -136,7 +136,7 @@ export default function StudyList() {
   return (
     <div>
       {role === "researcher" && (
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="mb-6 rounded-lg border border-blue-200 border-l-4 border-l-blue-400 bg-blue-50 p-4">
           <h2 className="text-sm font-semibold text-blue-900">Welcome to Airlock</h2>
           <p className="mt-1 text-sm text-blue-800">
             Airlock is Houston Methodist's research data broker. Submit a data request with your
@@ -162,7 +162,7 @@ export default function StudyList() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as Study["status"] | "")}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -173,9 +173,12 @@ export default function StudyList() {
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <div className="flex items-center justify-center gap-3 py-12">
+          <div className="spinner" />
+          <span className="text-sm text-gray-500">Loading studies...</span>
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
+        <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -190,7 +193,7 @@ export default function StudyList() {
               {filtered.map((row) => (
                 <tr
                   key={row.id}
-                  className="cursor-pointer hover:bg-gray-50"
+                  className="cursor-pointer transition-colors duration-150 hover:bg-gray-50"
                   onClick={() => navigate(`/studies/${row.id}`)}
                 >
                   {columns.map((col) => (

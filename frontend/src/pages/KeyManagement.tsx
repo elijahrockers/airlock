@@ -42,14 +42,17 @@ export default function KeyManagement() {
         <h1 className="text-2xl font-bold text-gray-900">Global Hash Keys</h1>
         <button
           onClick={() => setShowRotate(true)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
         >
           Rotate Key
         </button>
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <div className="flex items-center justify-center gap-3 py-12">
+          <div className="spinner" />
+          <span className="text-sm text-gray-500">Loading keys...</span>
+        </div>
       ) : (
         <DataTable
           columns={[

@@ -19,7 +19,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link to="/" className="text-xl font-bold text-gray-900">
@@ -35,7 +35,7 @@ export default function Layout() {
                       <Link
                         key={item.to}
                         to={item.to}
-                        className={`text-sm font-medium ${
+                        className={`text-sm font-medium transition-colors duration-150 ${
                           location.pathname === item.to
                             ? "text-blue-600"
                             : "text-gray-500 hover:text-gray-700"
@@ -53,7 +53,7 @@ export default function Layout() {
                   setRole(e.target.value as UserRole);
                   navigate("/");
                 }}
-                className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700"
+                className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 transition-colors duration-150 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="broker">Broker</option>
                 <option value="researcher">Researcher</option>
