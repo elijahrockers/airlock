@@ -1,8 +1,16 @@
-# Research Data Deidentification Pipeline
+# HMH Research Data Deidentification Pipeline
 
 ## Purpose
 
-Houston Methodist's research data pipeline implements the **honest broker model** per HIPAA §164.514(c), ensuring that no single actor or system holds both identified clinical data and the context to link it back to patients. The pipeline spans seven stages — from researcher request through final release to a compute cluster — across five systems: **Airlock** (governance registry), **XNAT/CTP** (deidentification engine), **dicom-phi-scan** (PHI screening), a **DHI staging environment**, and the **DGX cluster** (AI/ML compute). Each stage enforces a separation of concerns so that deidentified data is never released without cryptographic key management, audit logging, and automated PHI screening.
+Houston Methodist's research data pipeline implements the **honest broker model** per HIPAA §164.514(c), ensuring that no single actor or system holds both identified clinical data and the context to link it back to patients. The pipeline spans seven stages — from researcher request through final release to a compute cluster — across five systems: **Airlock** (governance registry), **XNAT/CTP** (deidentification engine for imaging data), **HPC** (staging and PHI screening), and **DGX/DHI** (AI/ML compute and consumption). Each stage enforces a separation of concerns so that deidentified data is never released without cryptographic key management, audit logging, and automated PHI screening.
+
+## Why a Data Brokerage?
+
+HIPAA's Privacy Rule permits the use of protected health information (PHI) for research, but only through controlled pathways. Under the Safe Harbor method (§164.514(b)), all 18 categories of identifiers must be removed before data qualifies as deidentified. The **honest broker** provision (§164.514(c)) designates a trusted intermediary — someone who is not a member of the research team — to perform or oversee this removal. Without a broker, researchers would need direct access to identified patient records, creating unnecessary exposure of PHI and placing the institution at compliance risk.
+
+In practice, most institutions manage this process through spreadsheets, shared drives, and manual coordination between research teams, IT, and compliance. This is error-prone: crosswalk files are emailed or stored in plaintext, key material is reused or lost, and there is no auditable record of who accessed what, when, or under which IRB protocol. A single misplaced mapping file can constitute a reportable breach under the HITECH Act.
+
+Airlock replaces this ad hoc process with a purpose-built registry. It encrypts all patient identifiers at rest, enforces per-study key isolation, logs every sensitive operation to an immutable audit trail, and provides the cryptographic keys that downstream deidentification tools need — without ever exposing identified data to the research team. The result is a repeatable, auditable pipeline that satisfies both the letter of HIPAA and the operational reality of a high-volume research institution.
 
 ## Pipeline Stages
 
@@ -26,55 +34,69 @@ Houston Methodist's research data pipeline implements the **honest broker model*
 **Who:** System (automated)
 **What:** Deidentified DICOM data is stored in XNAT under a project corresponding to the Airlock study. Researchers access their deidentified datasets through XNAT's project-level permissions. The accession-level crosswalk in Airlock preserves the link between deidentified data and original studies for incidental finding workflows.
 
-### Stage 5 — Data Sent to DHI Staging (DHI Staging Environment)
+### Stage 5 — Data Staged on HPC (HPC)
 
 **Who:** Broker / System
-**What:** When deidentified data is ready for AI/ML workloads, it is transferred to the Digital Health Institute staging environment. This intermediate step provides a controlled handoff point before data enters the compute cluster, allowing for final review and PHI screening.
+**What:** When deidentified data is ready for AI/ML workloads, it is transferred from XNAT to the HPC staging environment. This intermediate step provides a controlled handoff point before data enters the compute cluster, allowing for final review and automated PHI screening.
 
-### Stage 6 — PHI Screening via dicom-phi-scan (DHI Staging Environment)
+### Stage 6 — PHI Screening via dicom-phi-scan (HPC)
 
 **Who:** System (automated)
-**What:** Before release, all DICOM files pass through **dicom-phi-scan**, a two-layer PHI detection tool. Layer 1 checks ~40 DICOM header tags against HIPAA Safe Harbor identifiers, filtering known deidentification placeholders. Layer 2 runs OCR on pixel data to detect burned-in annotations — all detected text is conservatively flagged as PHI. This is a **gating step**: data that fails screening is held for broker review and remediation. Data that passes is cleared for release.
+**What:** Before release, all DICOM files on HPC pass through **dicom-phi-scan**, a two-layer PHI detection tool. Layer 1 checks ~40 DICOM header tags against HIPAA Safe Harbor identifiers, filtering known deidentification placeholders. Layer 2 runs OCR on pixel data to detect burned-in annotations — all detected text is conservatively flagged as PHI. This is a **gating step**: data that fails screening is held for broker review and remediation. Data that passes is cleared for release.
 
-### Stage 7 — Release to DGX Cluster (DGX)
+### Stage 7 — Release to DGX/DHI (DGX/DHI)
 
 **Who:** System (automated) / Broker
-**What:** Cleared data is released to the DGX cluster, where it is available for AI and machine learning workloads. At this point, the data has passed through cryptographic deidentification, project-level isolation, and automated PHI screening.
+**What:** Cleared data is pushed from HPC to the DGX cluster / Digital Health Institute environment, where it is available for AI and machine learning workloads. At this point, the data has passed through cryptographic deidentification, project-level isolation, and automated PHI screening.
 
 ## Flow
 
 ```
- Researcher            Broker              System
- ──────────            ──────              ──────
-     │                    │                    │
-     │  1. Create study   │                    │
-     │  + upload CSV      │                    │
-     │ ──── Airlock ────► │                    │
-     │                    │                    │
-     │                    │  2. Approve dataset │
-     │                    │  + set temporal     │
-     │                    │    policy           │
-     │                    │  + export keys      │
-     │                    │ ──── Airlock ──────►│
-     │                    │                    │
-     │                    │         3. Deidentify data
-     │                    │            (XNAT / CTP)
-     │                    │                    │
-     │                    │         4. Store in XNAT
-     │                    │                    │
-     │                    │         5. Transfer to
-     │                    │            DHI staging
-     │                    │                    │
-     │                    │         6. PHI screening
-     │                    │            (dicom-phi-scan)
-     │                    │                    │
-     │                    │     ┌───────────────┤
-     │                    │     │  PASS    FAIL │
-     │                    │     ▼          │    │
-     │                    │  7. Release    │    │
-     │                    │     to DGX     ▼    │
-     │                    │            Remediate │
-     │                    │◄───────────────┘    │
+ Researcher        Broker            XNAT              HPC             DGX/DHI
+ ──────────        ──────            ────              ───             ───────
+     │                │                │                │                │
+     │  1. Create     │                │                │                │
+     │  study +       │                │                │                │
+     │  upload CSV    │                │                │                │
+     │ ── Airlock ──► │                │                │                │
+     │                │                │                │                │
+     │                │  2. Approve    │                │                │
+     │                │  + temporal    │                │                │
+     │                │    policy      │                │                │
+     │                │  + export keys │                │                │
+     │                │ ─── keys ────► │                │                │
+     │                │                │                │                │
+     │                │                │  3. Deidentify │                │
+     │                │                │     (CTP tags, │                │
+     │                │                │      UIDs,     │                │
+     │                │                │      dates)    │                │
+     │                │                │                │                │
+     │                │                │  4. Store      │                │
+     │                │                │     deidentified                │
+     │                │                │     data       │                │
+     │                │                │                │                │
+     │                │                │ ── transfer ─► │                │
+     │                │                │                │                │
+     │                │                │                │  5. Stage data │
+     │                │                │                │                │
+     │                │                │                │  6. PHI screen │
+     │                │                │                │  (dicom-phi-   │
+     │                │                │                │   scan)        │
+     │                │                │                │                │
+     │                │                │            ┌───┤                │
+     │                │                │            │   │                │
+     │                │                │       PASS │   │ FAIL           │
+     │                │                │            │   │   │            │
+     │                │                │            │   │   ▼            │
+     │                │                │            │   │ Remediate      │
+     │                │◄───────────────│────────────│───┘   │            │
+     │                │                │            │       │            │
+     │                │                │            ▼       │            │
+     │                │                │            │ ── push ────────► │
+     │                │                │            │                   │
+     │                │                │            │       7. Available│
+     │                │                │            │       for AI/ML   │
+     │                │                │            │       workloads   │
 ```
 
 ## Reidentification Path
