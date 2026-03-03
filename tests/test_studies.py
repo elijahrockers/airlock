@@ -54,6 +54,33 @@ class TestStudyCRUD:
         assert resp.json()["title"] == "Updated Title"
         assert resp.json()["status"] == "active"
 
+    async def test_default_temporal_policy_is_removed(self, client, study_payload):
+        resp = await client.post(
+            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-TP-DEF"}
+        )
+        assert resp.status_code == 201
+        assert resp.json()["temporal_policy"] == "removed"
+
+    async def test_create_study_with_shifted(self, client, study_payload):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={**study_payload, "irb_pro_number": "PRO-TP-SHIFT", "temporal_policy": "shifted"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["temporal_policy"] == "shifted"
+
+    async def test_update_temporal_policy(self, client, study_payload):
+        create_resp = await client.post(
+            "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-TP-UPD"}
+        )
+        study_id = create_resp.json()["id"]
+        resp = await client.patch(
+            f"/api/v1/studies/{study_id}",
+            json={"temporal_policy": "unshifted"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["temporal_policy"] == "unshifted"
+
     async def test_archive_study(self, client, study_payload):
         create_resp = await client.post(
             "/api/v1/studies", json={**study_payload, "irb_pro_number": "PRO-ARC-1"}

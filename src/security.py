@@ -43,6 +43,14 @@ def hmac_hash(value: str) -> str:
     return hmac.new(_hmac_key, value.encode(), hashlib.sha256).hexdigest()
 
 
+def compute_date_offset(study_id: str, mrn: str) -> int:
+    """Compute a deterministic date offset (1–3650 days) for temporal shifting."""
+    message = f"{study_id}:{mrn}"
+    digest = hmac.new(_hmac_key, message.encode(), hashlib.sha256).digest()
+    value = int.from_bytes(digest[:8], byteorder="big")
+    return (value % 3650) + 1
+
+
 def generate_key_material() -> bytes:
     """Generate a new random Fernet key and return it Fernet-encrypted."""
     raw_key = Fernet.generate_key()

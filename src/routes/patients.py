@@ -7,15 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.audit import log_action
 from src.auth import User, get_current_user
 from src.database import get_db
-from src.models import PatientMapping, Study
+from src.models import PatientMapping, Study, TemporalPolicy
 from src.schemas import (
+    DateOffsetResponse,
     PatientBulkRevealResponse,
     PatientLookupResponse,
     PatientMappingCreate,
     PatientMappingResponse,
     PatientRevealResponse,
 )
-from src.security import decrypt, encrypt, hmac_hash
+from src.security import compute_date_offset, decrypt, encrypt, hmac_hash
 
 router = APIRouter(prefix="/api/v1/studies/{study_id}/patients", tags=["patients"])
 
@@ -134,13 +135,59 @@ async def lookup_patient(
     )
 
 
+@router.get("/date-offset", response_model=DateOffsetResponse)
+async def get_date_offset(
+    study_id: uuid.UUID,
+    mrn: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    study = await _get_study_or_404(db, study_id)
+
+    if study.temporal_policy != TemporalPolicy.shifted:
+        raise HTTPException(
+            status_code=409,
+            detail="Study temporal policy is not 'shifted'; date offsets are not applicable",
+        )
+
+    mrn_hashed = hmac_hash(mrn)
+    result = await db.execute(
+        select(PatientMapping).where(
+            PatientMapping.study_id == study_id,
+            PatientMapping.mrn_hash == mrn_hashed,
+        )
+    )
+    mapping = result.scalar_one_or_none()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="Patient not found in this study")
+
+    offset = compute_date_offset(str(study_id), mrn)
+
+    await log_action(
+        db,
+        actor=user.username,
+        action="date_offset_lookup",
+        resource_type="patient_mapping",
+        resource_id=str(mapping.id),
+        detail={"study_id": str(study_id)},
+    )
+    await db.commit()
+
+    return DateOffsetResponse(
+        study_id=study_id,
+        subject_id=mapping.subject_id,
+        date_offset_days=offset,
+    )
+
+
 @router.get("/reveal-all", response_model=PatientBulkRevealResponse)
 async def reveal_all_patients(
     study_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await _get_study_or_404(db, study_id)
+    study = await _get_study_or_404(db, study_id)
+    is_shifted = study.temporal_policy == TemporalPolicy.shifted
 
     result = await db.execute(
         select(PatientMapping)
@@ -149,15 +196,19 @@ async def reveal_all_patients(
     )
     mappings = result.scalars().all()
 
-    patients = [
-        PatientRevealResponse(
-            id=m.id,
-            study_id=m.study_id,
-            mrn=decrypt(m.mrn_encrypted),
-            subject_id=m.subject_id,
+    patients = []
+    for m in mappings:
+        mrn = decrypt(m.mrn_encrypted)
+        offset = compute_date_offset(str(study_id), mrn) if is_shifted else None
+        patients.append(
+            PatientRevealResponse(
+                id=m.id,
+                study_id=m.study_id,
+                mrn=mrn,
+                subject_id=m.subject_id,
+                date_offset_days=offset,
+            )
         )
-        for m in mappings
-    ]
 
     await log_action(
         db,
@@ -183,13 +234,18 @@ async def reveal_patient(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await _get_study_or_404(db, study_id)
+    study = await _get_study_or_404(db, study_id)
 
     mapping = await db.get(PatientMapping, patient_id)
     if not mapping or mapping.study_id != study_id:
         raise HTTPException(status_code=404, detail="Patient mapping not found in this study")
 
     decrypted_mrn = decrypt(mapping.mrn_encrypted)
+    offset = (
+        compute_date_offset(str(study_id), decrypted_mrn)
+        if study.temporal_policy == TemporalPolicy.shifted
+        else None
+    )
 
     await log_action(
         db,
@@ -206,4 +262,5 @@ async def reveal_patient(
         study_id=mapping.study_id,
         mrn=decrypted_mrn,
         subject_id=mapping.subject_id,
+        date_offset_days=offset,
     )

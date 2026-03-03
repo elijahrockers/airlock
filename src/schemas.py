@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from src.models import DatasetType, StudyStatus
+from src.models import DatasetType, StudyStatus, TemporalPolicy
 
 # --- Study ---
 
@@ -13,6 +13,7 @@ class StudyCreate(BaseModel):
     description: str | None = None
     pi_name: str = Field(max_length=200)
     requestor: str | None = Field(default=None, max_length=200)
+    temporal_policy: TemporalPolicy = TemporalPolicy.removed
 
 
 class StudyUpdate(BaseModel):
@@ -21,6 +22,7 @@ class StudyUpdate(BaseModel):
     pi_name: str | None = Field(default=None, max_length=200)
     requestor: str | None = Field(default=None, max_length=200)
     status: StudyStatus | None = None
+    temporal_policy: TemporalPolicy | None = None
 
 
 class StudyResponse(BaseModel):
@@ -33,6 +35,7 @@ class StudyResponse(BaseModel):
     pi_name: str
     requestor: str | None
     status: StudyStatus
+    temporal_policy: TemporalPolicy
     created_at: datetime
     updated_at: datetime
 
@@ -54,6 +57,7 @@ class KeyExportResponse(BaseModel):
     global_key: str
     global_key_version: int
     project_key: str
+    temporal_policy: TemporalPolicy
 
 
 # --- Patient Mapping ---
@@ -79,11 +83,18 @@ class PatientLookupResponse(BaseModel):
     subject_id: str
 
 
+class DateOffsetResponse(BaseModel):
+    study_id: uuid.UUID
+    subject_id: str
+    date_offset_days: int
+
+
 class PatientRevealResponse(BaseModel):
     id: uuid.UUID
     study_id: uuid.UUID
     mrn: str
     subject_id: str
+    date_offset_days: int | None = None
 
 
 class PatientBulkRevealResponse(BaseModel):

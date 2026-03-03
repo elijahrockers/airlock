@@ -20,7 +20,9 @@ export default function StudyDetail() {
   const [accessions, setAccessions] = useState<AccessionMapping[]>([]);
 
   // MRN reveal state
-  const [revealedMrns, setRevealedMrns] = useState<Record<string, string>>({});
+  const [revealedMrns, setRevealedMrns] = useState<
+    Record<string, { mrn: string; offset: number | null }>
+  >({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealingAll, setRevealingAll] = useState(false);
   const [showConfirmRevealAll, setShowConfirmRevealAll] = useState(false);
@@ -55,7 +57,10 @@ export default function StudyDetail() {
     setRevealingId(patientId);
     try {
       const result = await api.revealPatient(id, patientId);
-      setRevealedMrns((prev) => ({ ...prev, [patientId]: result.mrn! }));
+      setRevealedMrns((prev) => ({
+        ...prev,
+        [patientId]: { mrn: result.mrn!, offset: result.date_offset_days ?? null },
+      }));
     } finally {
       setRevealingId(null);
     }
@@ -67,9 +72,9 @@ export default function StudyDetail() {
     setRevealingAll(true);
     try {
       const result = await api.revealAllPatients(id);
-      const mrns: Record<string, string> = {};
+      const mrns: Record<string, { mrn: string; offset: number | null }> = {};
       for (const p of result.patients) {
-        mrns[p.id] = p.mrn!;
+        mrns[p.id] = { mrn: p.mrn!, offset: p.date_offset_days ?? null };
       }
       setRevealedMrns(mrns);
     } finally {
@@ -141,6 +146,10 @@ export default function StudyDetail() {
             <dd>{study.requestor ?? "—"}</dd>
           </div>
           <div>
+            <dt className="font-medium text-gray-500">Temporal Policy</dt>
+            <dd className="capitalize">{study.temporal_policy}</dd>
+          </div>
+          <div>
             <dt className="font-medium text-gray-500">Created</dt>
             <dd>{new Date(study.created_at).toLocaleString()}</dd>
           </div>
@@ -186,7 +195,7 @@ export default function StudyDetail() {
                 const revealed = revealedMrns[p.id];
                 if (revealed) {
                   return (
-                    <span className="font-mono text-sm">{revealed}</span>
+                    <span className="font-mono text-sm">{revealed.mrn}</span>
                   );
                 }
                 return (
@@ -216,6 +225,29 @@ export default function StudyDetail() {
               header: "Subject ID",
               render: (p: PatientMapping) => p.subject_id,
             },
+            ...(study.temporal_policy === "shifted"
+              ? [
+                  {
+                    key: "offset",
+                    header: "Date Offset (days)",
+                    render: (p: PatientMapping) => {
+                      const revealed = revealedMrns[p.id];
+                      if (revealed) {
+                        return (
+                          <span className="font-mono text-sm">
+                            {revealed.offset}
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-xs italic text-gray-400">
+                          Reveal MRN first
+                        </span>
+                      );
+                    },
+                  },
+                ]
+              : []),
             {
               key: "created",
               header: "Added",

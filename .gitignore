@@ -17,3 +17,6 @@ htmlcov/
 .coverage
 node_modules/
 frontend/dist/
+
+# Claude Code local settings
+.claude/

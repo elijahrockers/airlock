@@ -11,6 +11,7 @@ from src.models import (
     GlobalHashKey,
     PatientMapping,
     Study,
+    TemporalPolicy,
 )
 from src.routes._helpers import create_project_key_for_study
 from src.security import encrypt, generate_key_material, hmac_hash
@@ -23,6 +24,7 @@ STUDIES = [
         "pi_name": "Dr. Sarah Chen",
         "requestor": "John Williams",
         "status": "active",
+        "temporal_policy": TemporalPolicy.shifted,
     },
     {
         "irb_pro_number": "PRO-2024-0107",
@@ -31,6 +33,7 @@ STUDIES = [
         "pi_name": "Dr. Michael Park",
         "requestor": "Emily Rodriguez",
         "status": "active",
+        "temporal_policy": TemporalPolicy.removed,
     },
     {
         "irb_pro_number": "PRO-2025-0003",
@@ -38,6 +41,7 @@ STUDIES = [
         "description": "Deidentification of whole-slide pathology images.",
         "pi_name": "Dr. Lisa Patel",
         "status": "draft",
+        "temporal_policy": TemporalPolicy.unshifted,
     },
 ]
 

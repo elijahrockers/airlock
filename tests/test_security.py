@@ -1,4 +1,11 @@
-from src.security import decrypt, decrypt_key_material, encrypt, generate_key_material, hmac_hash
+from src.security import (
+    compute_date_offset,
+    decrypt,
+    decrypt_key_material,
+    encrypt,
+    generate_key_material,
+    hmac_hash,
+)
 
 
 class TestEncryption:
@@ -26,6 +33,28 @@ class TestHMAC:
         h = hmac_hash("test")
         assert len(h) == 64
         int(h, 16)  # Should not raise
+
+
+class TestDateOffset:
+    def test_offset_deterministic(self):
+        a = compute_date_offset("study-1", "MRN001")
+        b = compute_date_offset("study-1", "MRN001")
+        assert a == b
+
+    def test_offset_in_range(self):
+        for i in range(100):
+            offset = compute_date_offset(f"study-{i}", f"MRN-{i}")
+            assert 1 <= offset <= 3650
+
+    def test_different_studies_different_offsets(self):
+        a = compute_date_offset("study-1", "MRN001")
+        b = compute_date_offset("study-2", "MRN001")
+        assert a != b
+
+    def test_different_mrns_different_offsets(self):
+        a = compute_date_offset("study-1", "MRN001")
+        b = compute_date_offset("study-1", "MRN002")
+        assert a != b
 
 
 class TestKeyMaterial:

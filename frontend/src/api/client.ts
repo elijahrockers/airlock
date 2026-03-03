@@ -13,6 +13,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type TemporalPolicy = "removed" | "shifted" | "unshifted";
+
 export interface Study {
   id: string;
   irb_pro_number: string;
@@ -21,6 +23,7 @@ export interface Study {
   pi_name: string;
   requestor: string | null;
   status: "draft" | "active" | "completed" | "archived";
+  temporal_policy: TemporalPolicy;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +42,7 @@ export interface PatientMapping {
   subject_id: string;
   created_at: string;
   mrn?: string;
+  date_offset_days?: number | null;
 }
 
 export interface PatientBulkRevealResponse {

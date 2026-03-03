@@ -37,6 +37,12 @@ class DatasetType(str, enum.Enum):
     other = "other"
 
 
+class TemporalPolicy(str, enum.Enum):
+    removed = "removed"
+    shifted = "shifted"
+    unshifted = "unshifted"
+
+
 class Study(Base):
     __tablename__ = "studies"
 
@@ -50,6 +56,9 @@ class Study(Base):
     requestor: Mapped[str | None] = mapped_column(String(200))
     status: Mapped[StudyStatus] = mapped_column(
         Enum(StudyStatus), default=StudyStatus.draft, nullable=False
+    )
+    temporal_policy: Mapped[TemporalPolicy] = mapped_column(
+        Enum(TemporalPolicy), default=TemporalPolicy.removed, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

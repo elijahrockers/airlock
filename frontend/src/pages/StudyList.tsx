@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, Study } from "../api/client";
+import { api, Study, TemporalPolicy } from "../api/client";
 import DataTable from "../components/DataTable";
 import StatusBadge from "../components/StatusBadge";
 
@@ -77,6 +77,7 @@ function CreateStudyModal({
     pi_name: "",
     description: "",
     requestor: "",
+    temporal_policy: "removed" as TemporalPolicy,
   });
   const [error, setError] = useState("");
 
@@ -113,6 +114,20 @@ function CreateStudyModal({
             </label>
           ),
         )}
+        <label className="mb-3 block">
+          <span className="text-sm font-medium text-gray-700">Temporal Policy</span>
+          <select
+            value={form.temporal_policy}
+            onChange={(e) =>
+              setForm({ ...form, temporal_policy: e.target.value as TemporalPolicy })
+            }
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="removed">Removed</option>
+            <option value="shifted">Shifted</option>
+            <option value="unshifted">Unshifted</option>
+          </select>
+        </label>
         <div className="mt-4 flex justify-end gap-3">
           <button
             type="button"

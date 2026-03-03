@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.audit import log_action
 from src.auth import User, get_current_user
 from src.database import get_db
-from src.models import GlobalHashKey, ProjectHashKey
+from src.models import GlobalHashKey, ProjectHashKey, Study
 from src.schemas import GlobalHashKeyResponse, KeyExportResponse
 from src.security import decrypt_key_material, generate_key_material
 
@@ -69,6 +69,11 @@ async def export_keys(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    # Get study
+    study = await db.get(Study, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+
     # Get project key
     result = await db.execute(
         select(ProjectHashKey).where(ProjectHashKey.study_id == study_id)
@@ -100,4 +105,5 @@ async def export_keys(
         global_key=decrypt_key_material(global_key.key_material),
         global_key_version=global_key.version,
         project_key=decrypt_key_material(project_key.key_material),
+        temporal_policy=study.temporal_policy,
     )

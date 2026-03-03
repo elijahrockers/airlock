@@ -53,6 +53,28 @@ class TestKeyExport:
         assert len(data["project_key"]) == 44
         assert data["global_key_version"] >= 1
 
+    async def test_export_includes_temporal_policy(self, client, study_with_global_key):
+        study_id = study_with_global_key
+        resp = await client.get(f"/api/v1/keys/study/{study_id}/export")
+        assert resp.status_code == 200
+        assert resp.json()["temporal_policy"] == "removed"
+
+    async def test_export_temporal_policy_shifted(self, client):
+        await client.post("/api/v1/keys/global/rotate")
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-KEY-TP-SHIFT",
+                "title": "Key Export Shifted Test",
+                "pi_name": "Dr. Key Shifted",
+                "temporal_policy": "shifted",
+            },
+        )
+        study_id = resp.json()["id"]
+        resp = await client.get(f"/api/v1/keys/study/{study_id}/export")
+        assert resp.status_code == 200
+        assert resp.json()["temporal_policy"] == "shifted"
+
     async def test_export_keys_no_study(self, client):
         resp = await client.get(
             "/api/v1/keys/study/00000000-0000-0000-0000-000000000000/export"

@@ -143,6 +143,202 @@ class TestPatientMappings:
         assert "MRN-BULK-1" in mrns
         assert "MRN-BULK-2" in mrns
 
+    async def test_reveal_offset_null_when_removed(self, client, study_id):
+        resp = await client.post(
+            f"/api/v1/studies/{study_id}/patients",
+            json={"mrn": "MRN-OFF-REM", "subject_id": "SUBJ-OFF-REM"},
+        )
+        patient_id = resp.json()["id"]
+        resp = await client.get(
+            f"/api/v1/studies/{study_id}/patients/{patient_id}/reveal"
+        )
+        assert resp.status_code == 200
+        assert resp.json()["date_offset_days"] is None
+
+    async def test_reveal_offset_present_when_shifted(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-SHIFTED-OFF",
+                "title": "Shifted Offset Test",
+                "pi_name": "Dr. Offset",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        resp = await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-OFF-SHIFT", "subject_id": "SUBJ-OFF-SHIFT"},
+        )
+        patient_id = resp.json()["id"]
+        resp = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/{patient_id}/reveal"
+        )
+        assert resp.status_code == 200
+        offset = resp.json()["date_offset_days"]
+        assert offset is not None
+        assert 1 <= offset <= 3650
+
+    async def test_reveal_all_offset_present_when_shifted(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-SHIFTED-BULK",
+                "title": "Shifted Bulk Offset Test",
+                "pi_name": "Dr. Bulk",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-BULK-OFF-1", "subject_id": "SUBJ-BULK-OFF-1"},
+        )
+        await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-BULK-OFF-2", "subject_id": "SUBJ-BULK-OFF-2"},
+        )
+        resp = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/reveal-all"
+        )
+        assert resp.status_code == 200
+        for p in resp.json()["patients"]:
+            assert p["date_offset_days"] is not None
+            assert 1 <= p["date_offset_days"] <= 3650
+
+    async def test_reveal_offset_deterministic(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-SHIFTED-DET",
+                "title": "Shifted Deterministic Test",
+                "pi_name": "Dr. Det",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        resp = await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-DET", "subject_id": "SUBJ-DET"},
+        )
+        patient_id = resp.json()["id"]
+        resp1 = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/{patient_id}/reveal"
+        )
+        resp2 = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/{patient_id}/reveal"
+        )
+        assert resp1.json()["date_offset_days"] == resp2.json()["date_offset_days"]
+
+    async def test_date_offset_happy_path(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-DATEOFF-OK",
+                "title": "Date Offset Happy Path",
+                "pi_name": "Dr. Offset",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-DO-1", "subject_id": "SUBJ-DO-1"},
+        )
+
+        resp = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/date-offset",
+            params={"mrn": "MRN-DO-1"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["study_id"] == shifted_study_id
+        assert data["subject_id"] == "SUBJ-DO-1"
+        assert 1 <= data["date_offset_days"] <= 3650
+        # No MRN in response
+        assert "mrn" not in data
+
+    async def test_date_offset_409_when_not_shifted(self, client, study_id):
+        # Default study fixture has temporal_policy=removed
+        await client.post(
+            f"/api/v1/studies/{study_id}/patients",
+            json={"mrn": "MRN-DO-REM", "subject_id": "SUBJ-DO-REM"},
+        )
+        resp = await client.get(
+            f"/api/v1/studies/{study_id}/patients/date-offset",
+            params={"mrn": "MRN-DO-REM"},
+        )
+        assert resp.status_code == 409
+
+    async def test_date_offset_404_unknown_mrn(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-DATEOFF-404",
+                "title": "Date Offset 404 Test",
+                "pi_name": "Dr. NotFound",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        resp = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/date-offset",
+            params={"mrn": "DOES-NOT-EXIST"},
+        )
+        assert resp.status_code == 404
+
+    async def test_date_offset_matches_reveal(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-DATEOFF-MATCH",
+                "title": "Date Offset Consistency",
+                "pi_name": "Dr. Match",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        resp = await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-DO-MATCH", "subject_id": "SUBJ-DO-MATCH"},
+        )
+        patient_id = resp.json()["id"]
+
+        offset_resp = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/date-offset",
+            params={"mrn": "MRN-DO-MATCH"},
+        )
+        reveal_resp = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/{patient_id}/reveal"
+        )
+        assert offset_resp.json()["date_offset_days"] == reveal_resp.json()["date_offset_days"]
+
+    async def test_date_offset_deterministic(self, client):
+        resp = await client.post(
+            "/api/v1/studies",
+            json={
+                "irb_pro_number": "PRO-DATEOFF-DET",
+                "title": "Date Offset Deterministic",
+                "pi_name": "Dr. Det",
+                "temporal_policy": "shifted",
+            },
+        )
+        shifted_study_id = resp.json()["id"]
+        await client.post(
+            f"/api/v1/studies/{shifted_study_id}/patients",
+            json={"mrn": "MRN-DO-DET", "subject_id": "SUBJ-DO-DET"},
+        )
+
+        resp1 = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/date-offset",
+            params={"mrn": "MRN-DO-DET"},
+        )
+        resp2 = await client.get(
+            f"/api/v1/studies/{shifted_study_id}/patients/date-offset",
+            params={"mrn": "MRN-DO-DET"},
+        )
+        assert resp1.json()["date_offset_days"] == resp2.json()["date_offset_days"]
+
     async def test_reveal_all_empty_study(self, client):
         resp = await client.post(
             "/api/v1/studies",
